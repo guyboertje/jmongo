@@ -13,3 +13,7 @@ API compatibility.
 The initial version of this gem only wraps enough functionality to cover my personal use-cases.
 I encourage project forking.
 
+INSTALLATION
+  % gem build jmongo.gemspec
+  % gem install jmongo-0.1.0.gem
+
