@@ -22,6 +22,7 @@ PROGRESS
 The following methods have been ported and have at least basic functionality.
 
 find
+  - limit, skip and sort
 find_one
 last_status
 insert

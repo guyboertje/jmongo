@@ -39,7 +39,7 @@ module Mongo
       @closed = false
       @query_run = false
 
-      @j_cursor = spawn_cursor
+      spawn_cursor
     end
 
     def next_document
@@ -61,6 +61,7 @@ module Mongo
       raise ArgumentError, "limit requires an integer" unless number_to_return.is_a? Integer
 
       @limit = number_to_return
+      @j_cursor.limit @limit
       self
     end
 
@@ -70,6 +71,21 @@ module Mongo
       raise ArgumentError, "skip requires an integer" unless number_to_skip.is_a? Integer
 
       @skip = number_to_skip
+      @j_cursor.skip @skip
+      self
+    end
+
+    def sort(key_or_list, direction=nil)
+      check_modifiable
+
+      if !direction.nil?
+        order = [[key_or_list, direction]]
+      else
+        order = key_or_list
+      end
+
+      @order = order
+      @j_cursor.sort to_dbobject(@order)
       self
     end
 
@@ -104,15 +120,16 @@ module Mongo
     end
 
     def spawn_cursor
-      cursor = @fields.nil? || @fields.empty? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
+      @j_cursor = @fields.nil? || @fields.empty? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
 
-      if cursor
-        cursor = cursor.skip @skip
-        cursor = cursor.limit @limit
-        cursor = cursor.batchSize @batch_size
+      if @j_cursor
+        skip @skip
+        limit @limit
+        sort @order
+        @j_cursor = @j_cursor.batchSize @batch_size
 
-        cursor = cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
-        cursor = cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
+        @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
+        @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
       end
 
       cursor
