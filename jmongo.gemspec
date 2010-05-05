@@ -11,7 +11,7 @@ Gem::Specification.new do |s|
   s.description = %q{}
   s.email = %q{cremes@mac.com}
   s.executables = ["jmongo"]
-  s.extra_rdoc_files = ["History.txt", "README.txt", "bin/jmongo", "version.txt"]
+  s.extra_rdoc_files = ["History.txt", "README.txt", "bin/jmongo", "version.txt", "LICENSE.txt"]
   s.files = ["History.txt", "README.txt", "Rakefile", "bin/jmongo", "lib/jmongo.rb", "lib/jmongo/collection.rb", "lib/jmongo/connection.rb", "lib/jmongo/cursor.rb", "lib/jmongo/db.rb", "lib/jmongo/utils.rb", "spec/jmongo_spec.rb", "spec/spec_helper.rb", "version.txt"]
   s.files += ["lib/jmongo/mongo-1.4.jar"]
   s.has_rdoc = true

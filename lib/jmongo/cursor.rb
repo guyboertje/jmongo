@@ -1,3 +1,17 @@
+# Copyright (C) 2008-2010 10gen Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 module Mongo
 
   class Cursor
@@ -17,18 +31,19 @@ module Mongo
       @explain    = options[:explain]
       @socket     = options[:socket]
       @batch_size = options[:batch_size] || Mongo::Constants::DEFAULT_BATCH_SIZE
-
-      cursor_opts = to_java_cursor_options(options)
+      @timeout    = options[:timeout]  || false
+      @tailable   = options[:tailable] || false
 
       #@full_collection_name = "#{@collection.db.name}.#{@collection.name}"
       @cache = []
       @closed = false
       @query_run = false
 
-      @j_cursor = spawn_cursor cursor_opts
+      @j_cursor = spawn_cursor
     end
 
     def next_document
+      @query_run = true
       from_dbobject(@j_cursor.next)
     end
 
@@ -38,6 +53,24 @@ module Mongo
         yield next_document
         num_returned += 1
       end
+    end
+
+    def limit(number_to_return=nil)
+      return @limit unless number_to_return
+      check_modifiable
+      raise ArgumentError, "limit requires an integer" unless number_to_return.is_a? Integer
+
+      @limit = number_to_return
+      self
+    end
+
+    def skip(number_to_skip=nil)
+      return @skip unless number_to_skip
+      check_modifiable
+      raise ArgumentError, "skip requires an integer" unless number_to_skip.is_a? Integer
+
+      @skip = number_to_skip
+      self
     end
 
 
@@ -70,34 +103,24 @@ module Mongo
       end
     end
 
-    def to_java_cursor_options options
-      @timeout    = options[:timeout]  || false
-      @tailable   = options[:tailable] || false
-
-      j_opts = 0
-      j_opts = j_opts | JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
-      j_opts = j_opts | JMongo::Bytes::QUERYOPTION_NOTIMEOUT if @timeout
-      j_opts
-    end
-
-    def spawn_cursor opts
-      cursor = if opts.zero?
-        @fields.nil? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
-      else
-        @j_collection.find @selector,
-        @fields,
-        @skip,
-        @batch_size,
-        opts
-      end
+    def spawn_cursor
+      cursor = @fields.nil? || @fields.empty? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
 
       if cursor
-        cursor = cursor.skip @skip unless @skip.zero?
-        cursor = cursor.limit @limite unless @limit.zero?
-        #cursor = cursor.batchSize @batch_size
-        cursor
-      else
-        nil
+        cursor = cursor.skip @skip
+        cursor = cursor.limit @limit
+        cursor = cursor.batchSize @batch_size
+
+        cursor = cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
+        cursor = cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
+      end
+
+      cursor
+    end
+
+    def check_modifiable
+      if @query_run || @closed
+        raise InvalidOperation, "Cannot modify the query once it has been run or closed."
       end
     end
 

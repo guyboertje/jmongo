@@ -1,3 +1,17 @@
+# Copyright (C) 2010 Chuck Remes
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 unless RUBY_PLATFORM =~ /java/
   error "This gem is only compatible with a java-based ruby environment like JRuby."
   exit 255
@@ -60,7 +74,7 @@ module Mongo
     search_me = ::File.expand_path(
     ::File.join(::File.dirname(fname), dir, '**', "*.#{extension}"))
 
-    Dir.glob(search_me).sort.each {|rb| puts "requiring #{rb}"; require rb}
+    Dir.glob(search_me).sort.each {|rb| require rb}
   end
 
   def self.require_all_libs_relative_to( fname, dir = nil )
@@ -80,29 +94,32 @@ module Mongo
       when Hash
         hash_to_dbobject obj
       else
-        puts "Un-handled class type [#{obj.class}]"
+        # primitive value, no conversion necessary
+        #puts "Un-handled class type [#{obj.class}]"
         obj
       end
     end
 
     def from_dbobject obj
-      hsh = {}
-      obj.toMap.keySet.each do |key|
-        value = obj.get key
-        #        puts "classes, key [#{key.class}], value [#{value.class}]"
-        #        puts "values, key [#{key}], value [#{value}]"
-
-        case value
-          # when I need to manipulate ObjectID objects, they should be
-          # processed here and wrapped in a ruby obj with the right api
-        when JMongo::BasicDBObject, JMongo::BasicDBList
-          hsh[key] = from_dbobject value
-        else
-          hsh[key] = value
-        end
-      end
-      hsh
-      #obj
+      #      hsh = {}
+      #      obj.toMap.keySet.each do |key|
+      #        value = obj.get key
+      #
+      #        case value
+      #          # when I need to manipulate ObjectID objects, they should be
+      #          # processed here and wrapped in a ruby obj with the right api
+      #        when JMongo::BasicDBObject, JMongo::BasicDBList
+      #          hsh[key] = from_dbobject value
+      #        else
+      #          hsh[key] = value
+      #        end
+      #      end
+      #
+      #      hsh
+      
+      # it appears that JRuby automagically wraps the java objects and makes them
+      # accessible to us for "free"; no need to do any special conversion
+      obj
     end
 
     def raise_not_implemented
@@ -125,7 +142,7 @@ module Mongo
       list = JMongo::BasicDBList.new
 
       ary.each_with_index do |element, index|
-        list.put(index, to_dbobject(value))
+        list.put(index, to_dbobject(element))
       end
 
       list

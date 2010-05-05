@@ -17,3 +17,11 @@ INSTALLATION
   % gem build jmongo.gemspec
   % gem install jmongo-0.1.0.gem
 
+
+PROGRESS
+The following methods have been ported and have at least basic functionality.
+
+find
+find_one
+last_status
+insert
