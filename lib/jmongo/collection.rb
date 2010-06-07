@@ -186,7 +186,7 @@ module Mongo
              else
                raise TypeError, "spec_or_object_id must be an instance of ObjectID or Hash, or nil"
              end
-      find(spec, opts.merge(:limit => -1, :timeout => true)).next_document
+      find(spec, opts.merge(:limit => 1, :timeout => true)).next_document
     end
 
     # Save a document to this collection.
