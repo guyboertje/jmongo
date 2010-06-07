@@ -132,7 +132,7 @@ module Mongo
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
       end
 
-      cursor
+      @j_cursor
     end
 
     def check_modifiable
