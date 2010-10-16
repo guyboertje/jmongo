@@ -42,17 +42,23 @@ module Mongo
 
       spawn_cursor
     end
-
+    def current_document
+      if !@query_run
+        next_document
+      else
+        from_dbobject(@j_cursor.curr)
+      end
+    end
     def next_document
       @query_run = true
-      from_dbobject(@j_cursor.next)
+      @j_cursor.has_next? ? from_dbobject(@j_cursor.next) : {}
     end
-
+    def has_next?
+      @j_cursor.has_next?
+    end
     def each
-      num_returned = 0
-      while @j_cursor.has_next? && (@limit <= 0 || num_returned < @limit)
+      while @j_cursor.has_next?
         yield next_document
-        num_returned += 1
       end
     end
 
@@ -62,7 +68,7 @@ module Mongo
       raise ArgumentError, "limit requires an integer" unless number_to_return.is_a? Integer
 
       @limit = number_to_return
-      @j_cursor.limit @limit
+      @j_cursor = @j_cursor.limit @limit
       self
     end
 
@@ -72,7 +78,7 @@ module Mongo
       raise ArgumentError, "skip requires an integer" unless number_to_skip.is_a? Integer
 
       @skip = number_to_skip
-      @j_cursor.skip @skip
+      @j_cursor = @j_cursor.skip(@skip)
       self
     end
 
@@ -86,7 +92,7 @@ module Mongo
       end
 
       @order = order
-      @j_cursor.sort to_dbobject(@order)
+      @j_cursor = @j_cursor.sort(to_dbobject(@order))
       self
     end
 
@@ -94,6 +100,11 @@ module Mongo
       @j_cursor.size
     end
     alias :count :size
+
+    def explain
+      from_dbobject @j_cursor.explain
+    end
+
 
     private
 
@@ -128,10 +139,10 @@ module Mongo
       @j_cursor = @fields.nil? || @fields.empty? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
 
       if @j_cursor
-        skip @skip
-        limit @limit
-        sort @order
-        @j_cursor = @j_cursor.batchSize @batch_size
+        @j_cursor = @j_cursor.skip(@skip) if @skip > 0
+        @j_cursor = @j_cursor.limit(@limit) if @limit > 0
+        @j_cursor = @j_cursor.sort(@order) if @order
+        @j_cursor = @j_cursor.batchSize(@batch_size)
 
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable

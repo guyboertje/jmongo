@@ -32,7 +32,6 @@ module Mongo
           o['_id'] = Java::OrgBsonTypes::ObjectId.new unless o[:_id] || o['_id']
         end
         db_obj = to_dbobject(obj)
-        puts db_obj.inspect
         if safe  && !db_obj.kind_of?(java.util.ArrayList)
           @j_collection.insert(db_obj,write_concern(:safe))
         else
@@ -45,18 +44,8 @@ module Mongo
         from_dbobject @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
       end
 
-      def update_documents(selector,document,upsert,multi)
-        crit = to_dbobject(selector)
-        doc = to_dbobject(document)
-        res = case [upsert,multi]
-              when [false,true]
-                @j_collection.updateMulti(crit,doc)
-              when [false,false]
-                @j_collection.update(crit,doc)
-              else
-                @j_collection.update(crit,doc,upsert,multi)
-              end
-        from_writeresult res
+      def update_documents(selector,document,upsert=false,multi=false)
+        @j_collection.update(to_dbobject(selector),to_dbobject(document),upsert,multi)
       end
 
       def save_document(obj, safe)
