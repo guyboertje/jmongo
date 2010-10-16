@@ -18,6 +18,8 @@ module Mongo
     include Mongo::Utils
     include Mongo::JavaImpl::Utils
 
+    attr_reader :j_cursor
+
     def initialize(collection, options={})
       @j_collection = collection.j_collection
 
@@ -49,16 +51,27 @@ module Mongo
         from_dbobject(@j_cursor.curr)
       end
     end
+
     def next_document
       @query_run = true
       @j_cursor.has_next? ? from_dbobject(@j_cursor.next) : {}
     end
+
     def has_next?
       @j_cursor.has_next?
     end
-    def each
+    # iterate directly from the mongo db
+    def each_live
       while @j_cursor.has_next?
         yield next_document
+      end
+    end
+    # regular ruby driver loads up the cache and iterates from it
+    def each
+      check_modifiable
+      @cache = j_cursor.to_a
+      while (doc = @cache.shift)
+        yield from_dbobject(doc)
       end
     end
 
@@ -153,7 +166,7 @@ module Mongo
 
     def check_modifiable
       if @query_run || @closed
-        raise InvalidOperation, "Cannot modify the query once it has been run or closed."
+        raise "Cannot modify the query once it has been run or closed."
       end
     end
 
