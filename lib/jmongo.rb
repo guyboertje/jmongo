@@ -87,66 +87,12 @@ module Mongo
 
 
   module Utils
-    def to_dbobject obj
-      case obj
-      when Array
-        array_to_dblist obj
-      when Hash
-        hash_to_dbobject obj
-      else
-        # primitive value, no conversion necessary
-        #puts "Un-handled class type [#{obj.class}]"
-        obj
-      end
-    end
-
-    def from_dbobject obj
-      #      hsh = {}
-      #      obj.toMap.keySet.each do |key|
-      #        value = obj.get key
-      #
-      #        case value
-      #          # when I need to manipulate ObjectID objects, they should be
-      #          # processed here and wrapped in a ruby obj with the right api
-      #        when JMongo::BasicDBObject, JMongo::BasicDBList
-      #          hsh[key] = from_dbobject value
-      #        else
-      #          hsh[key] = value
-      #        end
-      #      end
-      #
-      #      hsh
-      
-      # it appears that JRuby automagically wraps the java objects and makes them
-      # accessible to us for "free"; no need to do any special conversion
-      obj
-    end
 
     def raise_not_implemented
       raise NoMethodError, "This method hasn't been implemented yet."
     end
 
     private
-
-    def hash_to_dbobject doc
-      obj = JMongo::BasicDBObject.new
-
-      doc.each_pair do |key, value|
-        obj.append(key, to_dbobject(value))
-      end
-
-      obj
-    end
-
-    def array_to_dblist ary
-      list = JMongo::BasicDBList.new
-
-      ary.each_with_index do |element, index|
-        list.put(index, to_dbobject(element))
-      end
-
-      list
-    end
 
   end # module Utils
 
@@ -155,14 +101,15 @@ end  # module Mongo
 Mongo.require_all_libs_relative_to(__FILE__)
 
 require 'java'
+require 'json' unless defined?(JSON)
+require 'bson' unless defined?(BSON)
+
 Mongo.require_all_jars_relative_to(__FILE__)
 
 # import all of the java packages we'll need into the JMongo namespace
 module JMongo
   import com.mongodb.BasicDBList
   import com.mongodb.BasicDBObject
-  import com.mongodb.ByteDecoder
-  import com.mongodb.ByteEncoder
   import com.mongodb.Bytes
   import com.mongodb.DB
   import com.mongodb.DBCollection
@@ -171,15 +118,16 @@ module JMongo
   import com.mongodb.Mongo
   import com.mongodb.MongoOptions
   import com.mongodb.ServerAddress
+  import com.mongodb.WriteConcern
 end
 
 
 module Mongo
   ASCENDING  =  1
   DESCENDING = -1
+  GEO2D      = '2d'
 
   module Constants
-
     DEFAULT_BATCH_SIZE = 100
   end
 

@@ -16,10 +16,12 @@ module Mongo
 
   class DB
     include Mongo::Utils
-    
+    include Mongo::JavaImpl::Utils
+
     attr_reader :j_db
+    attr_reader :name
     attr_reader :connection
-    
+
     def initialize(db_name, connection, options={})
       @name       = db_name
       @connection = connection

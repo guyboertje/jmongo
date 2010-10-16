@@ -15,8 +15,9 @@
 module Mongo
 
   class Collection
-    include Mongo::Utils
-    
+    include Mongo::JavaImpl::Utils
+    include Mongo::JavaImpl::Collection_
+
     attr_reader :j_collection
     attr_reader :db, :name, :pk_factory, :hint
 
@@ -54,8 +55,8 @@ module Mongo
       end
 
       @db, @j_db, @name  = db, db.j_db, name
-      #@connection = @db.connection
-      #@pk_factory = pk_factory || BSON::ObjectID
+      @connection = @db.connection
+      #@pk_factory = pk_factory || BSON::ObjectId
       @hint = nil
       @j_collection = @j_db.getCollection @name
     end
@@ -153,7 +154,6 @@ module Mongo
                           :order => sort, :hint => hint, :snapshot => snapshot, :timeout => timeout, :batch_size => batch_size)
       if block_given?
         yield cursor
-        cursor.close()
         nil
       else
         cursor
@@ -165,8 +165,8 @@ module Mongo
     # @return [OrderedHash, Nil]
     #   a single document or nil if no result is found.
     #
-    # @param [Hash, ObjectID, Nil] spec_or_object_id a hash specifying elements 
-    #   which must be present for a document to be included in the result set or an 
+    # @param [Hash, ObjectID, Nil] spec_or_object_id a hash specifying elements
+    #   which must be present for a document to be included in the result set or an
     #   instance of ObjectID to be used as the value for an _id query.
     #   If nil, an empty selector, {}, will be used.
     #
@@ -179,14 +179,14 @@ module Mongo
       spec = case spec_or_object_id
              when nil
                {}
-#             when BSON::ObjectID
-#               {:_id => spec_or_object_id}
+             when BSON::ObjectId, Java::OrgBsonTypes::ObjectId
+               {'_id' => spec_or_object_id}
              when Hash
                spec_or_object_id
              else
-               raise TypeError, "spec_or_object_id must be an instance of ObjectID or Hash, or nil"
+               raise TypeError, "spec_or_object_id must be an instance of ObjectId or Hash, or nil"
              end
-      find(spec, opts.merge(:limit => -1, :timeout => true)).next_document
+      find_one_document(spec, opts)
     end
 
     # Save a document to this collection.
@@ -198,11 +198,12 @@ module Mongo
     #
     # @return [ObjectID] the _id of the saved document.
     #
-    # @option opts [Boolean] :safe (+false+) 
+    # @option opts [Boolean] :safe (+false+)
     #   If true, check that the save succeeded. OperationFailure
     #   will be raised on an error. Note that a safe check requires an extra
     #   round-trip to the database.
     def save(doc, options={})
+      save_document(doc, !!(options[:safe]))
     end
 
     # Insert one or more documents into the collection.
@@ -214,17 +215,17 @@ module Mongo
     #   the _id of the inserted document or a list of _ids of all inserted documents.
     #   Note: the object may have been modified by the database's PK factory, if it has one.
     #
-    # @option opts [Boolean] :safe (+false+) 
+    # @option opts [Boolean] :safe (+false+)
     #   If true, check that the save succeeded. OperationFailure
     #   will be raised on an error. Note that a safe check requires an extra
     #   round-trip to the database.
     #
     # @core insert insert-instance_method
     def insert(doc_or_docs, options={})
-      doc_or_docs = [doc_or_docs] unless doc_or_docs.is_a?(Array)
       #doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
-      result = insert_documents(doc_or_docs, @name, true, options[:safe])
-      #result.size > 1 ? result : result.first
+      safe = !!(options[:safe])
+      result = insert_documents(doc_or_docs,safe)
+      result.size > 1 ? result : result.first
     end
     alias_method :<<, :insert
 
@@ -250,22 +251,8 @@ module Mongo
     #
     # @core remove remove-instance_method
     def remove(selector={}, opts={})
-      # Initial byte is 0.
-      message = BSON::ByteBuffer.new([0, 0, 0, 0])
-      BSON::BSON_RUBY.serialize_cstr(message, "#{@db.name}.#{@name}")
-      message.put_int(0)
-      message.put_array(BSON::BSON_CODER.serialize(selector, false, true).to_a)
-
-      if opts[:safe]
-        @connection.send_message_with_safe_check(Mongo::Constants::OP_DELETE, message, @db.name,
-          "#{@db.name}['#{@name}'].remove(#{selector.inspect})")
-        # the return value of send_message_with_safe_check isn't actually meaningful --
-        # only the fact that it didn't raise an error is -- so just return true
-        true
-      else
-        @connection.send_message(Mongo::Constants::OP_DELETE, message,
-          "#{@db.name}['#{@name}'].remove(#{selector.inspect})")
-      end
+      safe = !!(opts[:safe])
+      remove_documents(selector,safe)
     end
 
     # Update a single document in this collection.
@@ -282,29 +269,15 @@ module Mongo
     # @option [Boolean] :upsert (+false+) if true, performs an upsert (update or insert)
     # @option [Boolean] :multi (+false+) update all documents matching the selector, as opposed to
     #   just the first matching document. Note: only works in MongoDB 1.1.3 or later.
-    # @option opts [Boolean] :safe (+false+) 
+    # @option opts [Boolean] :safe (+false+)
     #   If true, check that the save succeeded. OperationFailure
     #   will be raised on an error. Note that a safe check requires an extra
-    #   round-trip to the database.
+    #   round-trip to the database.  NOTE!!!! Java driver does not have a safe option for update
     #
     # @core update update-instance_method
     def update(selector, document, options={})
-      # Initial byte is 0.
-      message = BSON::ByteBuffer.new([0, 0, 0, 0])
-      BSON::BSON_RUBY.serialize_cstr(message, "#{@db.name}.#{@name}")
-      update_options  = 0
-      update_options += 1 if options[:upsert]
-      update_options += 2 if options[:multi]
-      message.put_int(update_options)
-      message.put_array(BSON::BSON_CODER.serialize(selector, false, true).to_a)
-      message.put_array(BSON::BSON_CODER.serialize(document, false, true).to_a)
-      if options[:safe]
-        @connection.send_message_with_safe_check(Mongo::Constants::OP_UPDATE, message, @db.name,
-          "#{@db.name}['#{@name}'].update(#{selector.inspect}, #{document.inspect})")
-      else
-        @connection.send_message(Mongo::Constants::OP_UPDATE, message,
-          "#{@db.name}['#{@name}'].update(#{selector.inspect}, #{document.inspect})")
-      end
+      upsert, multi = !!(options[:upsert]), !!(options[:multi])
+      update_documents(selector, document,upsert,multi)
     end
 
     # Create a new index.
@@ -350,42 +323,9 @@ module Mongo
     #
     # @core indexes create_index-instance_method
     def create_index(spec, opts={})
-      opts.assert_valid_keys(:min, :max, :background, :unique, :dropDups) if opts.is_a?(Hash)
-      field_spec = OrderedHash.new
-      if spec.is_a?(String) || spec.is_a?(Symbol)
-        field_spec[spec.to_s] = 1
-      elsif spec.is_a?(Array) && spec.all? {|field| field.is_a?(Array) }
-        spec.each do |f|
-          if [Mongo::ASCENDING, Mongo::DESCENDING, Mongo::GEO2D].include?(f[1])
-            field_spec[f[0].to_s] = f[1]
-          else
-            raise MongoArgumentError, "Invalid index field #{f[1].inspect}; " + 
-              "should be one of Mongo::ASCENDING (1), Mongo::DESCENDING (-1) or Mongo::GEO2D ('2d')."
-          end
-        end
-      else
-        raise MongoArgumentError, "Invalid index specification #{spec.inspect}; " + 
-          "should be either a string, symbol, or an array of arrays."
-      end
-
-      name = generate_index_name(field_spec)
-      if opts == true || opts == false
-        warn "For Collection#create_index, the method for specifying a unique index has changed." +
-          "Please pass :unique => true to the method instead."
-      end
-      sel  = {
-        :name   => name,
-        :ns     => "#{@db.name}.#{@name}",
-        :key    => field_spec,
-        :unique => (opts == true ? true : false) }
-      sel.merge!(opts) if opts.is_a?(Hash)
-      begin
-        response = insert_documents([sel], Mongo::DB::SYSTEM_INDEX_COLLECTION, false, true)
-      rescue Mongo::OperationFailure
-        raise Mongo::OperationFailure, "Failed to create index #{sel.inspect} with the following errors: #{response}"
-      end
-      name
+      create_indexes(spec,opts)
     end
+    alias_method :ensure_index, :create_index
 
     # Drop a specified index.
     #
@@ -393,7 +333,7 @@ module Mongo
     #
     # @core indexes
     def drop_index(name)
-      @db.drop_index(@name, name)
+      @j_collection.dropIndexes(name)
     end
 
     # Drop all indexes.
@@ -402,7 +342,7 @@ module Mongo
     def drop_indexes
 
       # Note: calling drop_indexes with no args will drop them all.
-      @db.drop_index(@name, '*')
+      @j_collection.dropIndexes('*')
     end
 
     # Drop the entire collection. USE WITH CAUTION.
@@ -562,7 +502,7 @@ module Mongo
     # Rename this collection.
     #
     # Note: If operating in auth mode, the client must be authorized as an admin to
-    # perform this operation. 
+    # perform this operation.
     #
     # @param [String] new_name the new name for this collection
     #
@@ -617,7 +557,7 @@ module Mongo
     #
     # @return [Integer]
     def count
-      find().count()
+      @j_collection.count()
     end
 
     alias :size :count
@@ -641,20 +581,8 @@ module Mongo
 
     private
 
-    def insert_documents(documents, collection_name=@name, check_keys=true, safe=false)
-      documents.each do |doc|
-        db_object = to_dbobject doc
-        @j_collection.insert db_object
-      end
-    end
-
     def generate_index_name(spec)
-      indexes = []
-      spec.each_pair do |field, direction|
-        indexes.push("#{field}_#{direction}")
-      end
-      indexes.join("_")
+      @j_collection.genIndexName(to_dbobject(spec))
     end
   end
-
 end

@@ -2,7 +2,7 @@ Project JMongo
 
 The Mongo project provides native bindings for most popular languages. For the ruby language,
 the project has a pure ruby execution path and a C extension to handle some of the heavy
-lifting. Unfortunately, the performance of the pure ruby path under jruby is less than 
+lifting. Unfortunately, the performance of the pure ruby path under jruby is less than
 stellar. Additionally, the C extension isn't compatible with jruby so we aren't able to take
 advantage of any native code boost.
 
@@ -26,3 +26,15 @@ find
 find_one
 last_status
 insert
+
+2010-10-16, Guy Boertje ported the following...
+
+count
+update
+save
+create_index
+ensure_index
+drop_index
+drop_indexes
+
+Also the returned objects now closer match those of the regular ruby mongo library

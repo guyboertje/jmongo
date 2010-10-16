@@ -16,6 +16,7 @@ module Mongo
 
   class Cursor
     include Mongo::Utils
+    include Mongo::JavaImpl::Utils
 
     def initialize(collection, options={})
       @j_collection = collection.j_collection
@@ -89,6 +90,10 @@ module Mongo
       self
     end
 
+    def size
+      @j_cursor.size
+    end
+    alias :count :size
 
     private
 
@@ -132,7 +137,7 @@ module Mongo
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
       end
 
-      cursor
+      self
     end
 
     def check_modifiable

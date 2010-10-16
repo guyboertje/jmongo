@@ -2,18 +2,18 @@
 
 Gem::Specification.new do |s|
   s.name = %q{jmongo}
-  s.version = "0.1.0"
+  s.version = "0.1.1"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = ["Chuck Remes"]
+  s.authors = ["Chuck Remes","Guy Boertje"]
   s.date = %q{2010-05-05}
   s.default_executable = %q{jmongo}
   s.description = %q{}
   s.email = %q{cremes@mac.com}
   s.executables = ["jmongo"]
   s.extra_rdoc_files = ["History.txt", "README.txt", "bin/jmongo", "version.txt", "LICENSE.txt"]
-  s.files = ["History.txt", "README.txt", "Rakefile", "bin/jmongo", "lib/jmongo.rb", "lib/jmongo/collection.rb", "lib/jmongo/connection.rb", "lib/jmongo/cursor.rb", "lib/jmongo/db.rb", "lib/jmongo/utils.rb", "spec/jmongo_spec.rb", "spec/spec_helper.rb", "version.txt"]
-  s.files += ["lib/jmongo/mongo-1.4.jar"]
+  s.files = ["History.txt", "README.txt", "Rakefile", "bin/jmongo", "lib/jmongo.rb", "lib/jmongo/ajrb.rb", "lib/jmongo/collection.rb", "lib/jmongo/connection.rb", "lib/jmongo/cursor.rb", "lib/jmongo/db.rb", "lib/jmongo/utils.rb", "spec/jmongo_spec.rb", "spec/spec_helper.rb", "version.txt"]
+  s.files += ["lib/jmongo/mongo-2.2.jar"]
   s.has_rdoc = true
   s.homepage = %q{http://github.com/chuckremes/jmongo}
   s.rdoc_options = ["--main", "README.txt"]
