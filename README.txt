@@ -36,6 +36,7 @@ create_index
 ensure_index
 drop_index
 drop_indexes
+drop_collection
 
 Also the returned objects are BSON::OrderedHash objects to match those of the regular ruby mongo library
 

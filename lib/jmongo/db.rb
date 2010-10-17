@@ -66,7 +66,7 @@ module Mongo
     alias_method :[], :collection
 
     def drop_collection(name)
-      raise_not_implemented
+      coll = collection(name).j_collection.drop
     end
 
     def error
