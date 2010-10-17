@@ -38,10 +38,7 @@ module Mongo
       @tailable   = options[:tailable] || false
 
       #@full_collection_name = "#{@collection.db.name}.#{@collection.name}"
-      @cache = []
-      @closed = false
       @query_run = false
-
       spawn_cursor
     end
     def current_document
@@ -61,17 +58,10 @@ module Mongo
       @j_cursor.has_next?
     end
     # iterate directly from the mongo db
-    def each_live
-      while @j_cursor.has_next?
-        yield next_document
-      end
-    end
-    # regular ruby driver loads up the cache and iterates from it
     def each
       check_modifiable
-      @cache = j_cursor.to_a
-      while (doc = @cache.shift)
-        yield from_dbobject(doc)
+      while @j_cursor.has_next?
+        yield next_document
       end
     end
 
@@ -112,12 +102,12 @@ module Mongo
     def size
       @j_cursor.size
     end
+
     alias :count :size
 
     def explain
       from_dbobject @j_cursor.explain
     end
-
 
     private
 
@@ -165,7 +155,7 @@ module Mongo
     end
 
     def check_modifiable
-      if @query_run || @closed
+      if @query_run
         raise "Cannot modify the query once it has been run or closed."
       end
     end

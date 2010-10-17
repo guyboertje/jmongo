@@ -18,7 +18,7 @@ module Mongo
     include Mongo::JavaImpl::Utils
     include Mongo::JavaImpl::Collection_
 
-    attr_reader :j_collection
+    attr_reader :j_collection, :j_db
     attr_reader :db, :name, :pk_factory, :hint
 
     # Initialize a collection object.

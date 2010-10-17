@@ -37,4 +37,6 @@ ensure_index
 drop_index
 drop_indexes
 
-Also the returned objects now closer match those of the regular ruby mongo library
+Also the returned objects are BSON::OrderedHash objects to match those of the regular ruby mongo library
+
+

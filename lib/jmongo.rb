@@ -121,7 +121,6 @@ module JMongo
   import com.mongodb.WriteConcern
 end
 
-
 module Mongo
   ASCENDING  =  1
   DESCENDING = -1
