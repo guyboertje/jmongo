@@ -366,12 +366,14 @@ module Mongo
     #
     # @core findandmodify find_and_modify-instance_method
     def find_and_modify(opts={})
-      cmd = OrderedHash.new
-      cmd[:findandmodify] = @name
-      cmd.merge!(opts)
-      cmd[:sort] = Mongo::Support.format_order_clause(opts[:sort]) if opts[:sort]
-
-      @db.command(cmd, false, true)['value']
+      query  = opts[:query] || {}
+      fields = opts[:fields] || {}
+      sort   = opts[:sort] || {}
+      update = opts[:update] || {}
+      remove = opts[:remove] || false
+      new_    = opts[:new] || false
+      upsert = opts[:upsert] || false
+      find_and_modify_document(query, fields, sort, remove, update, new_, upsert)
     end
 
     # Perform a map/reduce operation on the current collection.

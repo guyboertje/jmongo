@@ -40,6 +40,12 @@ module Mongo
         documents.collect { |o| o[:_id] || o['_id'] }
       end
 
+      def find_and_modify_document(query,fields,sort,remove,update,new_,upsert)
+        res = @j_collection.find_and_modify(to_dbobject(query),to_dbobject(fields),to_dbobject(sort),remove,to_dbobject(update),new_,upsert)
+        puts res.inspect
+        from_dbobject res
+      end
+
       def find_one_document(document,fields)
         from_dbobject @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
       end
@@ -77,6 +83,7 @@ module Mongo
       def from_dbobject obj
         hsh = BSON::OrderedHash.new
         #hsh.merge!(JSON.parse(obj.toString))
+        return hsh if obj.nil?
         obj.toMap.keySet.each do |key|
           value = obj.get key
           case value
