@@ -32,6 +32,7 @@ insert
 count
 update
 save
+find_and_modify
 create_index
 ensure_index
 drop_index
