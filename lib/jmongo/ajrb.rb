@@ -7,6 +7,16 @@
 
 module Mongo
   module JavaImpl
+    module Connection_
+      private
+      def get_db_names
+        @connection.get_database_names
+      end
+      def drop_a_db(name)
+        @connection.drop_database(name)
+      end
+    end
+
     module Collection_
 
       private

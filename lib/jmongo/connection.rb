@@ -15,8 +15,11 @@
 module Mongo
 
   class Connection
+    include Mongo::JavaImpl::Utils
+    include Mongo::JavaImpl::Connection_
+
     attr_reader :connection
-    
+
     def initialize host = nil, port = nil, opts = {}
       @host = host || 'localhost'
       @port = port || 27017
@@ -28,7 +31,7 @@ module Mongo
 
       @connection = JMongo::Mongo.new server_address, options
     end
-    
+
     def self.paired(nodes, opts={})
       raise_not_implemented
     end
@@ -98,7 +101,7 @@ module Mongo
     #
     # @return [Array]
     def database_names
-      raise_not_implemented
+      get_db_names
     end
 
     # Return a database with the given name.
@@ -121,14 +124,14 @@ module Mongo
     #
     # @core databases []-instance_method
     def [](db_name)
-      raise_not_implemented
+      DB.new db_name, self
     end
 
     # Drop a database.
     #
     # @param [String] name name of an existing database.
     def drop_database(name)
-      raise_not_implemented
+      drop_a_db name
     end
 
     # Copy the database +from+ to +to+ on localhost. The +from+ database is
@@ -205,7 +208,7 @@ module Mongo
     def close
       raise_not_implemented
     end
-    
+
   end # class Connection
 
 end # module Mongo

@@ -38,6 +38,8 @@ ensure_index
 drop_index
 drop_indexes
 drop_collection
+drop_database
+database_names
 
 Also the returned objects are BSON::OrderedHash objects to match those of the regular ruby mongo library
 
