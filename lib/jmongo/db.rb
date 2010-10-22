@@ -15,7 +15,7 @@
 module Mongo
 
   class DB
-    include Mongo::Utils
+    include Mongo::JavaImpl::Db_
     include Mongo::JavaImpl::Utils
 
     attr_reader :j_db
@@ -114,18 +114,19 @@ module Mongo
     end
 
     def stats
-      raise_not_implemented
+      exec_command(:dbstats)
     end
 
     def create_index(collection_name, field_or_spec, unique=false)
-      raise_not_implemented
+      collection(collection_name).create_indexes(field_or_spec,{:unique=>unique})
     end
 
     def ok?(doc)
-      raise_not_implemented
+      doc['ok'] == 1.0
     end
 
-    def command(selector, admin=false, check_response=false, sock=nil)
+    def command(selector, opts={})
+
       raise_not_implemented
     end
 

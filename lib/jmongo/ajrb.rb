@@ -1,12 +1,14 @@
 # Copyright (C) 2010 Guy Boertje
 #
-#
-# Mongo::JavaImpl::Collection
+# Mongo::JavaImpl::Connection_
+# Mongo::JavaImpl::Db_
+# Mongo::JavaImpl::Collection_
 # Mongo::JavaImpl::Utils
 #
 
 module Mongo
   module JavaImpl
+
     module Connection_
       private
       def get_db_names
@@ -17,8 +19,21 @@ module Mongo
       end
     end
 
-    module Collection_
+    module Db_
+      #SYSTEM_NAMESPACE_COLLECTION = "system.namespaces"
+      #SYSTEM_INDEX_COLLECTION = "system.indexes"
+      #SYSTEM_PROFILE_COLLECTION = "system.profile"
+      #SYSTEM_USER_COLLECTION = "system.users"
+      #SYSTEM_COMMAND_COLLECTION = "$cmd"
 
+      private
+      def exec_command(cmd)
+        cmd_res = @j_db.command(to_dbobject({cmd => true}))
+        from_dbobject(cmd_res)
+      end
+    end
+
+    module Collection_
       private
       def create_indexes(obj,opts)
         return @j_collection.ensureIndex("#{obj}") if obj.is_a?(String) || obj.is_a?(Symbol)
