@@ -340,7 +340,6 @@ module Mongo
     #
     # @core indexes
     def drop_indexes
-
       # Note: calling drop_indexes with no args will drop them all.
       @j_collection.dropIndexes('*')
     end

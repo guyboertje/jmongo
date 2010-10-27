@@ -6,7 +6,9 @@
 # Mongo::JavaImpl::Utils
 #
 
+
 module Mongo
+
   module JavaImpl
 
     module Connection_
@@ -54,7 +56,7 @@ module Mongo
       def insert_documents(obj,safe)
         documents = obj.is_a?(Array) ? obj : [obj]
         documents.each do |o|
-          o['_id'] = Java::OrgBsonTypes::ObjectId.new unless o[:_id] || o['_id']
+          o['_id'] = BSON::ObjectId.new unless o[:_id] || o['_id']
         end
         db_obj = to_dbobject(obj)
         if safe  && !db_obj.kind_of?(java.util.ArrayList)
@@ -80,8 +82,8 @@ module Mongo
       end
 
       def save_document(obj, safe)
-        id = obj[:_id] || obj['_id']
-        obj['_id'] = id = Java::OrgBsonTypes::ObjectId.new if id.nil?
+        id = obj.delete(:_id) || obj.delete('_id')
+        obj['_id'] = id || BSON::ObjectId.create
         db_obj = to_dbobject(obj)
         if safe
           @j_collection.save(db_obj,write_concern(:safe))
@@ -91,6 +93,7 @@ module Mongo
         id
       end
     end
+
     module Utils
       def to_dbobject obj
         case obj
@@ -106,20 +109,25 @@ module Mongo
       end
 
       def from_dbobject obj
-        hsh = BSON::OrderedHash.new
-        #hsh.merge!(JSON.parse(obj.toString))
-        return hsh if obj.nil?
-        obj.toMap.keySet.each do |key|
-          value = obj.get key
+        return {} if obj.nil?
+        return obj.to_a if obj.kind_of?(Java::ComMongodb::BasicDBList)
+
+        hsh = BSON::OrderedHash.create(obj)
+        hsh.each do |key,value|
           case value
             # when I need to manipulate ObjectID objects, they should be
             # processed here and wrapped in a ruby obj with the right api
-          when JMongo::BasicDBObject, JMongo::BasicDBList
-            hsh[key] = from_dbobject value
+          when Java::OrgBsonTypes::ObjectId
+            hsh[key] = BSON::ObjectId.create(value)
+          when JMongo::BasicDBObject, Java::ComMongodb::BasicDBObject
+            hsh[key] = from_dbobject(value)
+          when JMongo::BasicDBList, Java::ComMongodb::BasicDBObject
+            hsh[key] = from_dbobject(value)
           else
             hsh[key] = value
           end
         end
+
         hsh
       end
 
@@ -129,7 +137,7 @@ module Mongo
         obj = JMongo::BasicDBObject.new
 
         doc.each_pair do |key, value|
-          obj.append(key.to_s, to_dbobject(value))
+          obj.put(key, to_dbobject(value))
         end
 
         obj
@@ -144,8 +152,7 @@ module Mongo
       end
 
       def from_writeresult obj
-        hsh = BSON::OrderedHash.new
-        hsh.merge!(JSON.parse(obj.toString))
+        BSON::OrderedHash.create(obj)
       end
 
       def write_concern(kind=nil)
@@ -161,3 +168,4 @@ module Mongo
     end
   end
 end
+

@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 module Mongo
 
 #  module Utils
@@ -49,7 +48,7 @@ module Mongo
 #
 #    def array_to_dblist ary
 #      list = JMongo::BasicDBList.new
-#      
+#
 #      ary.each_with_index do |element, index|
 #        list.put(index, to_dbobject(value))
 #      end
