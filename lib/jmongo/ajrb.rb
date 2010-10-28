@@ -101,6 +101,8 @@ module Mongo
           array_to_dblist obj
         when Hash
           hash_to_dbobject obj
+        when BSON::ObjectId
+          obj.proxy
         else
           # primitive value, no conversion necessary
           #puts "Un-handled class type [#{obj.class}]"
