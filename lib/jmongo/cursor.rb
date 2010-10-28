@@ -51,7 +51,7 @@ module Mongo
 
     def next_document
       @query_run = true
-      @j_cursor.has_next? ? from_dbobject(@j_cursor.next) : {}
+      @j_cursor.has_next? ? from_dbobject(@j_cursor.next) : BSON::OrderedHash.new
     end
 
     def has_next?
@@ -109,6 +109,14 @@ module Mongo
       from_dbobject @j_cursor.explain
     end
 
+    def to_a
+      ret = []
+      check_modifiable
+      while @j_cursor.has_next?
+        ret << from_dbobject(@j_cursor.next)
+      end
+      ret
+    end
     private
 
     # Convert the +:fields+ parameter from a single field name or an array

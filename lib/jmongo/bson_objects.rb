@@ -75,7 +75,7 @@ module BSON
   end
 
   class Code < String
-
+    # copied verbatim from ruby driver
     # Hash mapping identifiers to their values
     attr_accessor :scope
 
