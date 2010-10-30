@@ -157,7 +157,10 @@ module Mongo
     def validate_collection(name)
       raise_not_implemented
     end
-
+    # additions to the ruby driver
+    def has_collection?(name)
+      has_coll name
+    end
   end # class DB
 
 end # module Mongo

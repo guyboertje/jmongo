@@ -97,64 +97,14 @@ module Mongo
   end # module Utils
 
 end  # module Mongo
-Mongo.require_all_jars_relative_to(__FILE__)
-# import all of the java packages we'll need into the JMongo namespace
 require 'json' unless defined?(JSON)
-require 'java'
 
-module JMongo
-  module BasicDBObjectExtentions
-    def keys
-      self.key_set.to_a
-    end
-    def merge!(other)
-      self.put_all(other)
-      self
-    end
-    def merge(other)
-      obj = new
-      obj.merge!(self)
-      obj.merge!(other)
-    end
-    def to_hash
-      JSON.parse(self.to_string)
-    end
-    def put(key,val)
-      self.java_send(:put,key.to_s,val)
-    end
-    def get(key)
-      self.java_send(:get,key.to_s)
-    end
-    def [](key)
-      self.get(key)
-    end
-  end
+Mongo.require_all_jars_relative_to(__FILE__)
 
-  import com.mongodb.BasicDBList
-  import com.mongodb.BasicDBObject
-  import com.mongodb.Bytes
-  import com.mongodb.DB
-  import com.mongodb.DBCollection
-  import com.mongodb.DBCursor
-  import com.mongodb.DBObject
-  import com.mongodb.Mongo
-  import com.mongodb.MongoOptions
-  import com.mongodb.ServerAddress
-  import com.mongodb.WriteConcern
-
-  class BasicDBObject
-    include BasicDBObjectExtentions
-
-    alias :update :merge!
-    alias :each_pair :each
-    alias :length :size
-  end
-
-end
+# import all of the java packages we'll need into the JMongo namespace
+require 'jmongo_jext'
 
 Mongo.require_all_libs_relative_to(__FILE__)
-
-#require 'bson' unless defined?(BSON)
 
 module Mongo
   ASCENDING  =  1

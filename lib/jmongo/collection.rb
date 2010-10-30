@@ -56,7 +56,7 @@ module Mongo
 
       @db, @j_db, @name  = db, db.j_db, name
       @connection = @db.connection
-      #@pk_factory = pk_factory || BSON::ObjectId
+      @pk_factory = pk_factory || BSON::ObjectId
       @hint = nil
       @j_collection = @j_db.getCollection @name
     end
@@ -179,7 +179,7 @@ module Mongo
       spec = case spec_or_object_id
              when nil
                {}
-             when BSON::ObjectId, Java::OrgBsonTypes::ObjectId
+             when BSON::ObjectId
                {'_id' => spec_or_object_id}
              when Hash
                spec_or_object_id
@@ -222,7 +222,8 @@ module Mongo
     #
     # @core insert insert-instance_method
     def insert(doc_or_docs, options={})
-      #doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
+      doc_or_docs = [doc_or_docs] unless doc_or_docs.kind_of?(Array)
+      doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
       safe = !!(options[:safe])
       result = insert_documents(doc_or_docs,safe)
       result.size > 1 ? result : result.first

@@ -12,7 +12,7 @@ Gem::Specification.new do |s|
   s.email = %q{cremes@mac.com}
   s.executables = ["jmongo"]
   s.extra_rdoc_files = ["History.txt", "README.txt", "bin/jmongo", "version.txt", "LICENSE.txt"]
-  s.files = ["History.txt", "README.txt", "Rakefile", "bin/jmongo", "lib/jmongo.rb", "lib/jmongo/ajrb.rb", "lib/jmongo/bson_objects.rb", "lib/jmongo/collection.rb", "lib/jmongo/connection.rb", "lib/jmongo/cursor.rb", "lib/jmongo/db.rb", "lib/jmongo/utils.rb", "spec/jmongo_spec.rb", "spec/spec_helper.rb", "version.txt"]
+  s.files = ["History.txt", "README.txt", "Rakefile", "bin/jmongo", "lib/jmongo.rb", "lib/jmongo_jext.rb", "lib/jmongo/ajrb.rb", "lib/jmongo/collection.rb", "lib/jmongo/connection.rb", "lib/jmongo/cursor.rb", "lib/jmongo/db.rb", "lib/jmongo/utils.rb", "spec/jmongo_spec.rb", "spec/spec_helper.rb", "version.txt"]
   s.files += ["lib/jmongo/mongo-2.2.jar"]
   s.has_rdoc = true
   s.homepage = %q{http://github.com/chuckremes/jmongo}

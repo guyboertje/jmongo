@@ -33,6 +33,9 @@ module Mongo
         cmd_res = @j_db.command(to_dbobject({cmd => true}))
         from_dbobject(cmd_res)
       end
+      def has_coll(name)
+        @j_db.collection_exists(name)
+      end
     end
 
     module Collection_
@@ -49,32 +52,30 @@ module Mongo
         else
           wr = @j_collection.remove(to_dbobject(obj))
         end
-        res = from_writeresult(wr)
-        res['err'].nil? && res['n'] > 0
+        wr.get_error.nil? && wr.get_n > 0
       end
 
       def insert_documents(obj,safe)
-        documents = obj.is_a?(Array) ? obj : [obj]
-        documents.each do |o|
-          o['_id'] = BSON::ObjectId.new unless o[:_id] || o['_id']
-        end
         db_obj = to_dbobject(obj)
-        if safe  && !db_obj.kind_of?(java.util.ArrayList)
+        if safe && !db_obj.kind_of?(java.util.ArrayList)
           @j_collection.insert(db_obj,write_concern(:safe))
         else
           @j_collection.insert(db_obj)
         end
-        documents.collect { |o| o[:_id] || o['_id'] }
+        obj.collect { |o| o['_id'] || o[:_id] }
       end
 
       def find_and_modify_document(query,fields,sort,remove,update,new_,upsert)
-        res = @j_collection.find_and_modify(to_dbobject(query),to_dbobject(fields),to_dbobject(sort),remove,to_dbobject(update),new_,upsert)
-        puts res.inspect
-        from_dbobject res
+        #res =
+        @j_collection.find_and_modify(to_dbobject(query),to_dbobject(fields),to_dbobject(sort),remove,to_dbobject(update),new_,upsert)
+        #puts res.inspect
+        #from_dbobject
+        #res
       end
 
       def find_one_document(document,fields)
-        from_dbobject @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
+        @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
+        #from_dbobject
       end
 
       def update_documents(selector,document,upsert=false,multi=false)
@@ -83,14 +84,14 @@ module Mongo
 
       def save_document(obj, safe)
         id = obj.delete(:_id) || obj.delete('_id')
-        obj['_id'] = id || BSON::ObjectId.create
+        obj['_id'] = id || BSON::ObjectId.new
         db_obj = to_dbobject(obj)
         if safe
           @j_collection.save(db_obj,write_concern(:safe))
         else
           @j_collection.save(db_obj)
         end
-        id
+        obj['_id']
       end
     end
 
@@ -101,8 +102,6 @@ module Mongo
           array_to_dblist obj
         when Hash
           hash_to_dbobject obj
-        when BSON::ObjectId
-          obj.proxy
         else
           # primitive value, no conversion necessary
           #puts "Un-handled class type [#{obj.class}]"
@@ -111,37 +110,19 @@ module Mongo
       end
 
       def from_dbobject obj
-        return {} if obj.nil?
-        return obj.to_a if obj.kind_of?(Java::ComMongodb::BasicDBList)
-
-        hsh = BSON::OrderedHash.create(obj)
-        hsh.each do |key,value|
-          case value
-            # when I need to manipulate ObjectID objects, they should be
-            # processed here and wrapped in a ruby obj with the right api
-          when Java::OrgBsonTypes::ObjectId
-            hsh[key] = BSON::ObjectId.create(value)
-          when JMongo::BasicDBObject, Java::ComMongodb::BasicDBObject
-            hsh[key] = from_dbobject(value)
-          when JMongo::BasicDBList, Java::ComMongodb::BasicDBObject
-            hsh[key] = from_dbobject(value)
-          else
-            hsh[key] = value
-          end
-        end
-
-        hsh
+        # it appears that JRuby automagically wraps the java objects and makes them
+        # accessible to us for "free"; no need to do any special conversion
+        # but the jruby wrapper object has been reopened to have more 'hash like' methods
+        obj
       end
 
       private
 
       def hash_to_dbobject doc
         obj = JMongo::BasicDBObject.new
-
         doc.each_pair do |key, value|
-          obj.put(key, to_dbobject(value))
+          obj.put(key.to_s, to_dbobject(value))
         end
-
         obj
       end
 
@@ -153,20 +134,10 @@ module Mongo
         list
       end
 
-      def from_writeresult obj
-        BSON::OrderedHash.create(obj)
-      end
-
+      WRT_CONCERN = Hash.new(0).merge!({:safe=>1})
       def write_concern(kind=nil)
-        i = case kind
-        when :safe
-          1
-        else
-          0
-        end
-        JMongo::WriteConcern.new(i)
+        JMongo::WriteConcern.new(WRT_CONCERN[kind])
       end
-
     end
   end
 end
