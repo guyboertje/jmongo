@@ -78,17 +78,20 @@ Benchmark.bm do |x|
     end
   end
 end
+db.drop_collection('bm')
 
-$ ruby mongo_bm.rb
-                          user     system      total        real
-                inserts:  0.997000   0.000000   0.997000 (  0.997000)
-                updates:  0.793000   0.000000   0.793000 (  0.793000)
-after find all, iterate:  0.204000   0.000000   0.204000 (  0.204000)
+Results
 
-$ ruby jmongo_bm.rb
-                          user     system      total        real
-                inserts:  0.434000   0.000000   0.434000 (  0.434000)
-                updates:  0.475000   0.000000   0.475000 (  0.475000)
-after find all, iterate:  0.145000   0.000000   0.145000 (  0.145000)
+ruby --fast --server mongo_bm.rb
+                              user     system      total        real
+                inserts:  0.879000   0.000000   0.879000 (  0.878000)
+                updates:  0.711000   0.000000   0.711000 (  0.711000)
+after find all, iterate:  0.243000   0.000000   0.243000 (  0.243000)
+
+ruby --fast --server jmongo_bm.rb
+                              user     system      total        real
+                inserts:  0.489000   0.000000   0.489000 (  0.489000)
+                updates:  0.357000   0.000000   0.357000 (  0.357000)
+after find all, iterate:  0.058000   0.000000   0.058000 (  0.058000)
 
 
