@@ -97,6 +97,10 @@ module Mongo
   end # module Utils
 
 end  # module Mongo
+if defined?(JrJackson)
+  JSON = JrJackson::Json
+end
+
 require 'json' unless defined?(JSON)
 
 Mongo.require_all_jars_relative_to(__FILE__)
