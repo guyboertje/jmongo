@@ -15,7 +15,6 @@
 module Mongo
 
   class Cursor
-    include Mongo::Utils
     include Mongo::JavaImpl::Utils
 
     attr_reader :j_cursor

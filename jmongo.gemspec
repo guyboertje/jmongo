@@ -30,8 +30,10 @@ Gem::Specification.new do |s|
       s.add_development_dependency(%q<bones>, [">= 3.4.1"])
     else
       s.add_dependency(%q<bones>, [">= 3.4.1"])
+      s.add_dependency "jrjackson"
     end
   else
     s.add_dependency(%q<bones>, [">= 3.4.1"])
+    s.add_dependency "jrjackson"
   end
 end

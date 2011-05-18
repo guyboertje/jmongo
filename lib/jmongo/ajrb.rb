@@ -19,6 +19,9 @@ module Mongo
       def drop_a_db(name)
         @connection.drop_database(name)
       end
+      def _server_version
+        @connection.get_version
+      end
     end
 
     module Db_
@@ -96,6 +99,10 @@ module Mongo
     end
 
     module Utils
+      def raise_not_implemented
+        raise NoMethodError, "This method hasn't been implemented yet."
+      end
+      
       def to_dbobject obj
         case obj
         when Array

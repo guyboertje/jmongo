@@ -85,18 +85,10 @@ module Mongo
     require_all_file_extensions_relative_to( fname, 'jar', dir )
   end
 
-
-  module Utils
-
-    def raise_not_implemented
-      raise NoMethodError, "This method hasn't been implemented yet."
-    end
-
-    private
-
-  end # module Utils
-
 end  # module Mongo
+
+require 'jrjackson'
+
 if defined?(JrJackson)
   JSON = JrJackson::Json
 end

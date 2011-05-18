@@ -165,7 +165,7 @@ module Mongo
     # @return [Mongo::ServerVersion]
     #   object allowing easy comparability of version.
     def server_version
-      raise_not_implemented
+      _server_version
     end
 
     # Is it okay to connect to a slave?
