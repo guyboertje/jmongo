@@ -6,7 +6,6 @@
 # Mongo::JavaImpl::Utils
 #
 
-
 module Mongo
 
   module JavaImpl
@@ -25,7 +24,7 @@ module Mongo
     end
 
     module Db_
-      #SYSTEM_NAMESPACE_COLLECTION = "system.namespaces"
+      SYSTEM_NAMESPACE_COLLECTION = "system.namespaces"
       #SYSTEM_INDEX_COLLECTION = "system.indexes"
       #SYSTEM_PROFILE_COLLECTION = "system.profile"
       #SYSTEM_USER_COLLECTION = "system.users"
@@ -45,6 +44,9 @@ module Mongo
       private
       def create_indexes(obj,opts)
         return @j_collection.ensureIndex("#{obj}") if obj.is_a?(String) || obj.is_a?(Symbol)
+
+        obj = Hash[obj] if obj.is_a?(Array)
+
         return @j_collection.ensureIndex(to_dbobject(obj),to_dbobject(opts)) if opts.is_a?(Hash)
         @j_collection.ensureIndex(to_dbobject(obj),generate_index_name(obj),!!(opts))
       end

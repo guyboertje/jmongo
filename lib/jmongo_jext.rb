@@ -12,6 +12,7 @@ module JMongo
   import com.mongodb.MongoOptions
   import com.mongodb.ServerAddress
   import com.mongodb.WriteConcern
+  import com.mongodb.MongoException
 
   module BasicDBObjectExtentions
     def keys

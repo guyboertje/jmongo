@@ -45,19 +45,25 @@ module Mongo
     end
 
     def collection_names
-      raise_not_implemented
+      names = collections_info.to_a.collect { |doc| doc['name'] || '' }
+      names = names.delete_if {|name| name.index(@name).nil? || name.index('$')}
+      names.map {|name| name.sub(@name + '.', '')}
     end
 
     def collections
-      raise_not_implemented
+      collection_names.map do |name|
+        Collection.new(self, name)
+      end
     end
 
     def collections_info(coll_name=nil)
-      raise_not_implemented
+      selector = {}
+      selector[:name] = full_collection_name(coll_name) if coll_name
+      Cursor.new(Collection.new(self, SYSTEM_NAMESPACE_COLLECTION), :selector => selector)
     end
 
     def create_collection(name, options={})
-      raise_not_implemented
+      @j_db.createCollection(name, to_dbobject(options))
     end
 
     def collection(name)
@@ -126,12 +132,11 @@ module Mongo
     end
 
     def command(selector, opts={})
-
       raise_not_implemented
     end
 
     def full_collection_name(collection_name)
-      raise_not_implemented
+      "#{@name}.#{collection_name}"
     end
 
     def pk_factory

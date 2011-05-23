@@ -347,7 +347,7 @@ module Mongo
 
     # Drop the entire collection. USE WITH CAUTION.
     def drop
-      @collection.drop
+      @j_collection.drop
     end
 
 
