@@ -62,7 +62,8 @@ module Mongo
 
       def insert_documents(obj,safe)
         db_obj = to_dbobject(obj)
-        if safe && !db_obj.kind_of?(java.util.ArrayList)
+
+        if safe
           @j_collection.insert(db_obj,write_concern(:safe))
         else
           @j_collection.insert(db_obj)
@@ -136,9 +137,9 @@ module Mongo
       end
 
       def array_to_dblist ary
-        list = java.util.ArrayList.new
-        ary.each do |ele|
-          list.add to_dbobject(ele)
+        list = Java::ComMongodb::DBObject[ary.length].new
+        ary.each_with_index do |ele, i|
+          list[i] = to_dbobject(ele)
         end
         list
       end
