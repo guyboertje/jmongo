@@ -89,7 +89,7 @@ end  # module Mongo
 
 require 'jrjackson'
 
-if defined?(JrJackson)
+if defined?(JrJackson) && !defined?(JSON)
   JSON = JrJackson::Json
 end
 
