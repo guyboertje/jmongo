@@ -93,7 +93,7 @@ module Mongo
         order = key_or_list
       end
 
-      @order = order
+      @order = Hash[*order.flatten]
       @j_cursor = @j_cursor.sort(to_dbobject(@order))
       self
     end
