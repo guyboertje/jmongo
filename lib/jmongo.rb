@@ -87,12 +87,6 @@ module Mongo
 
 end  # module Mongo
 
-require 'jrjackson'
-
-if defined?(JrJackson) && !defined?(JSON)
-  JSON = JrJackson::Json
-end
-
 require 'json' unless defined?(JSON)
 
 Mongo.require_all_jars_relative_to(__FILE__)
