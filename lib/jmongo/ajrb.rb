@@ -105,7 +105,7 @@ module Mongo
       def raise_not_implemented
         raise NoMethodError, "This method hasn't been implemented yet."
       end
-      
+
       def to_dbobject obj
         case obj
         when Array
@@ -120,10 +120,17 @@ module Mongo
       end
 
       def from_dbobject obj
-        # it appears that JRuby automagically wraps the java objects and makes them
-        # accessible to us for "free"; no need to do any special conversion
-        # but the jruby wrapper object has been reopened to have more 'hash like' methods
-        obj
+        # for better upstream compatibility make the objects into a hash or array
+        if obj.class == JMongo::BasicDBObject
+          ret = obj.hashify
+          ret.values.each{|v| v = from_dbobject(v)}
+        elsif obj.class == JMongo::BasicDBList
+          ret = obj.arrayify
+          ret.each{|v| v = from_dbobject(v)}
+        else
+          ret = obj
+        end
+        ret
       end
 
       private
