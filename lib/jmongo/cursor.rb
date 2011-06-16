@@ -108,6 +108,15 @@ module Mongo
       from_dbobject @j_cursor.explain
     end
 
+    def map(&block)
+      ret = []
+      check_modifiable
+      while @j_cursor.has_next?
+        ret << block.call(from_dbobject(@j_cursor.next))
+      end
+      ret
+    end
+
     def to_a
       ret = []
       check_modifiable

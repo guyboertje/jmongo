@@ -29,7 +29,7 @@ end
 
 class Java::ComMongodb::BasicDBList
   def arrayify
-    self.to_map.values.to_a
+    self.to_map.to_hash.values.to_a
   end
 end
 

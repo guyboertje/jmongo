@@ -72,16 +72,11 @@ module Mongo
       end
 
       def find_and_modify_document(query,fields,sort,remove,update,new_,upsert)
-        #res =
-        @j_collection.find_and_modify(to_dbobject(query),to_dbobject(fields),to_dbobject(sort),remove,to_dbobject(update),new_,upsert)
-        #puts res.inspect
-        #from_dbobject
-        #res
+        from_dbobject @j_collection.find_and_modify(to_dbobject(query),to_dbobject(fields),to_dbobject(sort),remove,to_dbobject(update),new_,upsert)
       end
 
       def find_one_document(document,fields)
-        @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
-        #from_dbobject
+        from_dbobject @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
       end
 
       def update_documents(selector,document,upsert=false,multi=false)
@@ -107,11 +102,12 @@ module Mongo
       end
 
       def to_dbobject obj
-        case obj
-        when Array
-          array_to_dblist obj
-        when Hash
-          hash_to_dbobject obj
+        if obj.respond_to?(:merge)
+          hash_to_dbobject(obj)
+        elsif obj.respond_to?(:compact)
+          array_to_dblist(obj)
+        elsif obj.class == Symbol
+          obj.to_s
         else
           # primitive value, no conversion necessary
           #puts "Un-handled class type [#{obj.class}]"
@@ -120,17 +116,15 @@ module Mongo
       end
 
       def from_dbobject obj
-        # for better upstream compatibility make the objects into a hash or array
-        if obj.class == JMongo::BasicDBObject
-          ret = obj.hashify
-          ret.values.each{|v| v = from_dbobject(v)}
-        elsif obj.class == JMongo::BasicDBList
-          ret = obj.arrayify
-          ret.each{|v| v = from_dbobject(v)}
+        # for better upstream compatibility make the objects into ruby hash or array
+        if obj.class == Java::ComMongodb::BasicDBObject
+          h = obj.hashify
+          Hash[h.keys.zip(h.values.map{|v| from_dbobject(v)})]
+        elsif obj.class == Java::ComMongodb::BasicDBList
+          obj.arrayify.map{|v| from_dbobject(v)}
         else
-          ret = obj
+          obj
         end
-        ret
       end
 
       private
