@@ -11,15 +11,28 @@ module Mongo
   module JavaImpl
 
     module Connection_
-      private
-      def get_db_names
-        @connection.get_database_names
+      module InstanceMethods
+        private
+        def get_db_names
+          @connection.get_database_names
+        end
+        def drop_a_db name
+          @connection.drop_database(name)
+        end
+        def _server_version
+          @connection.get_version
+        end
       end
-      def drop_a_db(name)
-        @connection.drop_database(name)
-      end
-      def _server_version
-        @connection.get_version
+      module ClassMethods
+        def _from_uri uri, opts={}
+          optarr = []
+          opts.each{|k,v| optarr << "#{k}=#{v}"}
+          unless optarr.empty?
+            uri << "?" << optarr.join("&")
+          end
+          puri = Java::ComMongodb::MongoURI.new(uri)
+          new("",0,{:new_from_uri=>puri.connect})
+        end
       end
     end
 
@@ -95,12 +108,15 @@ module Mongo
         obj['_id']
       end
     end
-
+    module NoImplYetClass
+      def raise_not_implemented
+        raise NoMethodError, "This method hasn't been implemented yet."
+      end
+    end
     module Utils
       def raise_not_implemented
         raise NoMethodError, "This method hasn't been implemented yet."
       end
-
       def to_dbobject obj
         if obj.respond_to?(:merge)
           hash_to_dbobject(obj)

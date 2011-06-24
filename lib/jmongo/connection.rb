@@ -16,20 +16,24 @@ module Mongo
 
   class Connection
     include Mongo::JavaImpl::Utils
-    include Mongo::JavaImpl::Connection_
+     extend Mongo::JavaImpl::NoImplYetClass
+    include Mongo::JavaImpl::Connection_::InstanceMethods
+     extend Mongo::JavaImpl::Connection_::ClassMethods
 
     attr_reader :connection
 
     def initialize host = nil, port = nil, opts = {}
-      @host = host || 'localhost'
-      @port = port || 27017
-      server_address = JMongo::ServerAddress.new @host, @port
-
-      options = JMongo::MongoOptions.new
-      options.connectionsPerHost = opts[:pool_size] || 1
-      options.socketTimeout = opts[:timeout].to_i * 1000 || 5000
-
-      @connection = JMongo::Mongo.new server_address, options
+      if opts.has_key?(:new_from_uri)
+        @connection = opts[:new_from_uri]
+      else
+        @host = host || 'localhost'
+        @port = port || 27017
+        server_address = JMongo::ServerAddress.new @host, @port
+        options = JMongo::MongoOptions.new
+        options.connectionsPerHost = opts[:pool_size] || 1
+        options.socketTimeout = opts[:timeout].to_i * 1000 || 5000
+        @connection = JMongo::Mongo.new(server_address, options)
+      end
     end
 
     def self.paired(nodes, opts={})
@@ -45,7 +49,7 @@ module Mongo
     #
     # @return [Mongo::Connection]
     def self.from_uri(uri, opts={})
-      raise_not_implemented
+      _from_uri(uri,opts)
     end
 
     # Apply each of the saved database authentications.
