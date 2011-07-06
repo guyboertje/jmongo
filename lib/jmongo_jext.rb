@@ -62,7 +62,13 @@ module BSON
   end
 
   ObjectId = Java::OrgBsonTypes::ObjectId
+
   OrderedHash = Java::ComMongodb::BasicDBObject
+  class Java::ComMongodb::BasicDBObject
+    def get(key)
+      self.java_send(:get,key.to_s)
+    end
+  end
 
   class Code < String
     # copied verbatim from ruby driver
@@ -96,9 +102,51 @@ module BSON
 
   # Raised when an invalid name is used.
   class InvalidKeyName < BSONError; end
-
 end
 
+module Mongo
+  def self.logger(logger=nil)
+    logger ? @logger = logger : @logger
+  end
+    # Generic Mongo Ruby Driver exception class.
+  class MongoRubyError < StandardError; end
+
+  # Raised when MongoDB itself has returned an error.
+  class MongoDBError < RuntimeError; end
+
+  # Raised when invalid arguments are sent to Mongo Ruby methods.
+  class MongoArgumentError < MongoRubyError; end
+
+  # Raised on failures in connection to the database server.
+  class ConnectionError < MongoRubyError; end
+
+  # Raised on failures in connection to the database server.
+  class ReplicaSetConnectionError < ConnectionError; end
+
+  # Raised on failures in connection to the database server.
+  class ConnectionTimeoutError < MongoRubyError; end
+
+  # Raised when a connection operation fails.
+  class ConnectionFailure < MongoDBError; end
+
+  # Raised when authentication fails.
+  class AuthenticationError < MongoDBError; end
+
+  # Raised when a database operation fails.
+  class OperationFailure < MongoDBError; end
+
+  # Raised when a socket read operation times out.
+  class OperationTimeout < ::Timeout::Error; end
+
+  # Raised when a client attempts to perform an invalid operation.
+  class InvalidOperation < MongoDBError; end
+
+  # Raised when an invalid collection or database name is used (invalid namespace name).
+  class InvalidNSName < RuntimeError; end
+
+  # Raised when the client supplies an invalid value to sort by.
+  class InvalidSortValueError < MongoRubyError; end
+end
 __END__
 
   module BasicDBObjectExtentions
