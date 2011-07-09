@@ -26,6 +26,7 @@ module Mongo
       if opts.has_key?(:new_from_uri)
         @connection = opts[:new_from_uri]
       else
+        @logger = opts[:logger]
         @host = host || 'localhost'
         @port = port || 27017
         server_address = JMongo::ServerAddress.new @host, @port
@@ -179,6 +180,15 @@ module Mongo
       raise_not_implemented
     end
 
+    def log_operation(name, payload)
+      return unless @logger
+      msg = "#{payload[:database]}['#{payload[:collection]}'].#{name}("
+      msg += payload.values_at(:selector, :document, :documents, :fields ).compact.map(&:inspect).join(', ') + ")"
+      msg += ".skip(#{payload[:skip]})"  if payload[:skip]
+      msg += ".limit(#{payload[:limit]})"  if payload[:limit]
+      msg += ".sort(#{payload[:order]})"  if payload[:order]
+      @logger.debug "MONGODB #{msg}"
+    end
 
     ## Connections and pooling ##
 
