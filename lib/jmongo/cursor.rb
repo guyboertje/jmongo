@@ -70,7 +70,7 @@ module Mongo
       raise ArgumentError, "limit requires an integer" unless number_to_return.is_a? Integer
 
       @limit = number_to_return
-      @j_cursor = @j_cursor.limit @limit
+      @j_cursor = @j_cursor.limit(@limit)
       self
     end
 
@@ -90,11 +90,10 @@ module Mongo
       if !direction.nil?
         order = [[key_or_list, direction]]
       else
-        order = key_or_list
+        order = [key_or_list]
       end
-
-      @order = Hash[*order.flatten]
-      @j_cursor = @j_cursor.sort(to_dbobject(@order))
+      ord = Hash[*order.flatten]
+      @j_cursor = @j_cursor.sort(to_dbobject(ord))
       self
     end
 
@@ -158,9 +157,9 @@ module Mongo
       @j_cursor = @fields.nil? || @fields.empty? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
 
       if @j_cursor
+        @j_cursor = @j_cursor.sort(@order) if @order
         @j_cursor = @j_cursor.skip(@skip) if @skip > 0
         @j_cursor = @j_cursor.limit(@limit) if @limit > 0
-        @j_cursor = @j_cursor.sort(@order) if @order
         @j_cursor = @j_cursor.batchSize(@batch_size)
 
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
