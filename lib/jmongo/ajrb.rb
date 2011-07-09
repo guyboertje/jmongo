@@ -64,23 +64,13 @@ module Mongo
         @j_collection.ensureIndex(to_dbobject(obj),generate_index_name(obj),!!(opts))
       end
 
-      def remove_documents(obj,safe)
-        if safe
-          wr = @j_collection.remove(to_dbobject(obj),write_concern(:safe))
-        else
-          wr = @j_collection.remove(to_dbobject(obj))
-        end
+      def remove_documents(obj, safe=nil)
+        wr = @j_collection.remove(to_dbobject(obj), write_concern(safe))
         wr.get_error.nil? && wr.get_n > 0
       end
 
-      def insert_documents(obj,safe)
-        db_obj = to_dbobject(obj)
-
-        if safe
-          @j_collection.insert(db_obj,write_concern(:safe))
-        else
-          @j_collection.insert(db_obj)
-        end
+      def insert_documents(obj, safe=nil)
+        @j_collection.insert(to_dbobject(obj), write_concern(safe))
         obj.collect { |o| o['_id'] || o[:_id] }
       end
 
@@ -88,23 +78,19 @@ module Mongo
         from_dbobject @j_collection.find_and_modify(to_dbobject(query),to_dbobject(fields),to_dbobject(sort),remove,to_dbobject(update),new_,upsert)
       end
 
-      def find_one_document(document,fields)
+      def find_one_document(document, fields)
         from_dbobject @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
       end
 
-      def update_documents(selector,document,upsert=false,multi=false)
-        @j_collection.update(to_dbobject(selector),to_dbobject(document),upsert,multi)
+      def update_documents(selector, document, upsert=false, multi=false, safe=nil)
+        @j_collection.update(to_dbobject(selector),to_dbobject(document), upsert, multi, write_concern(safe))
       end
 
-      def save_document(obj, safe)
+      def save_document(obj, safe=nil)
         id = obj.delete(:_id) || obj.delete('_id')
         obj['_id'] = id || BSON::ObjectId.new
         db_obj = to_dbobject(obj)
-        if safe
-          @j_collection.save(db_obj,write_concern(:safe))
-        else
-          @j_collection.save(db_obj)
-        end
+        @j_collection.save(db_obj, write_concern(safe))
         obj['_id']
       end
     end
@@ -161,9 +147,22 @@ module Mongo
         list
       end
 
-      WRT_CONCERN = Hash.new(0).merge!({:safe=>1})
-      def write_concern(kind=nil)
-        JMongo::WriteConcern.new(WRT_CONCERN[kind])
+      #@collection.save({:doc => 'foo'}, :safe => nil)       ---> NONE = new WriteConcern(-1)
+      #@collection.save({:doc => 'foo'}, :safe => true)        ---> NORMAL = new WriteConcern(0)
+      #@collection.save({:doc => 'foo'}, :safe => {:w => 2})   ---> new WriteConcern( 2 , 0 , false)
+      #@collection.save({:doc => 'foo'}, :safe => {:w => 2, :wtimeout => 200})                 ---> new WriteConcern( 2 , 200 , false)
+      #@collection.save({:doc => 'foo'}, :safe => {:w => 2, :wtimeout => 200, :fsync => true}) ---> new WriteConcern( 2 , 0 , true)
+      #@collection.save({:doc => 'foo'}, :safe => {:fsync => true}) ---> FSYNC_SAFE = new WriteConcern( 1 , 0 , true)
+
+      def write_concern(safe)
+        return JMongo::WriteConcern.new(-1) if safe.nil?
+        return JMongo::WriteConcern.new(0) if safe.is_a?(FalseClass)
+        return JMongo::WriteConcern.new(1) if safe.is_a?(TrueClass)
+        return JMongo::WriteConcern.new(0) unless safe.is_a?(Hash)
+        w = safe[:w] || 1
+        t = safe[:wtimeout] || 0
+        f = !!(safe[:fsync] || false)
+        JMongo::WriteConcern.new(w, t, f) #dont laugh!
       end
     end
   end

@@ -101,7 +101,14 @@ module Mongo
       @j_cursor.size
     end
 
-    alias :count :size
+    def count(skip_and_limit = false)
+      if skip_and_limit && @skip && @limit
+        check_modifiable
+        @j_cursor.skip(@skip).limit(@limit).size
+      else
+        @j_cursor.size
+      end
+    end
 
     def explain
       from_dbobject @j_cursor.explain
