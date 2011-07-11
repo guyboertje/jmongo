@@ -136,7 +136,7 @@ module Mongo
   class OperationFailure < MongoDBError; end
 
   # Raised when a socket read operation times out.
-  class OperationTimeout < ::Timeout::Error; end
+  class OperationTimeout < MongoDBError; end
 
   # Raised when a client attempts to perform an invalid operation.
   class InvalidOperation < MongoDBError; end
@@ -147,6 +147,7 @@ module Mongo
   # Raised when the client supplies an invalid value to sort by.
   class InvalidSortValueError < MongoRubyError; end
 end
+
 __END__
 
   module BasicDBObjectExtentions
