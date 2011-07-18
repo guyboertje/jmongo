@@ -1,3 +1,4 @@
+require 'timeout'
 require 'java'
 
 module JMongo
@@ -57,6 +58,8 @@ module BSON
 
   class Java::OrgBsonTypes::ObjectId
     def self.from_string(str)
+      v = is_valid?(str.to_s)
+      raise BSON::InvalidObjectId, "illegal ObjectID format" unless v
       new(str.to_s)
     end
   end
@@ -95,6 +98,7 @@ module BSON
 
   # Raised when attempting to initialize an invalid ObjectId.
   class InvalidObjectId < BSONError; end
+  class InvalidObjectID < BSONError; end
 
   # Raised when trying to insert a document that exceeds the 4MB limit or
   # when the document contains objects that can't be serialized as BSON.

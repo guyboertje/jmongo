@@ -27,7 +27,7 @@ module Mongo
       @admin      = options[:admin]    || false
       @skip       = options[:skip]     || 0
       @limit      = options[:limit]    || 0
-      @order      = options[:order]
+      @order      = _sort(options[:order])
       @hint       = options[:hint]
       @snapshot   = options[:snapshot]
       @explain    = options[:explain]
@@ -38,6 +38,7 @@ module Mongo
 
       #@full_collection_name = "#{@collection.db.name}.#{@collection.name}"
       @query_run = false
+
       spawn_cursor
     end
     def current_document
@@ -59,6 +60,7 @@ module Mongo
     # iterate directly from the mongo db
     def each
       check_modifiable
+      #raise "Backtrace..."
       while @j_cursor.has_next?
         yield next_document
       end
@@ -86,15 +88,19 @@ module Mongo
 
     def sort(key_or_list, direction=nil)
       check_modifiable
+      @ord = _sort(key_or_list, direction)
+      @j_cursor = @j_cursor.sort(@ord)
+      self
+    end
 
+    def _sort(key_or_list, direction=nil)
+      return if key_or_list.nil?
       if !direction.nil?
         order = [[key_or_list, direction]]
       else
         order = [key_or_list]
       end
-      ord = Hash[*order.flatten]
-      @j_cursor = @j_cursor.sort(to_dbobject(ord))
-      self
+      to_dbobject(Hash[*order.flatten])
     end
 
     def size

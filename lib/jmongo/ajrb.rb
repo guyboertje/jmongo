@@ -26,10 +26,16 @@ module Mongo
       module ClassMethods
         def _from_uri uri, opts={}
           optarr = []
-          opts.each{|k,v| optarr << "#{k}=#{v}"}
-          unless optarr.empty?
-            uri << "?" << optarr.join("&")
+          unless uri =~ /^mongodb:\/\/(([-.\w]+):([^@]+)@)?([-.\w]+)(:([\w]+))?(\/([-\w]+))?/
+            raise MongoArgumentError, "MongoDB URI incorrect"
           end
+          pieces = uri.split("//")
+          extra = pieces.last.count('/') == 0 ? "/" : ""
+          opts.each{|k,v| (optarr << "#{k}=#{v.to_s}") unless v.nil?}
+          unless optarr.empty?
+            uri << "#{extra}?" << optarr.join("&")
+          end
+          puts "+++++++++++++++ _from_uri uri: #{uri.inspect}"
           puri = Java::ComMongodb::MongoURI.new(uri)
           new("",0,{:new_from_uri=>puri.connect})
         end
@@ -70,7 +76,8 @@ module Mongo
       end
 
       def insert_documents(obj, safe=nil)
-        @j_collection.insert(to_dbobject(obj), write_concern(safe))
+        dbo = to_dbobject(obj)
+        @j_collection.insert(dbo, write_concern(safe))
         obj.collect { |o| o['_id'] || o[:_id] }
       end
 
@@ -103,6 +110,7 @@ module Mongo
       def raise_not_implemented
         raise NoMethodError, "This method hasn't been implemented yet."
       end
+
       def to_dbobject obj
         if obj.respond_to?(:merge)
           hash_to_dbobject(obj)
@@ -124,6 +132,8 @@ module Mongo
           Hash[h.keys.zip(h.values.map{|v| from_dbobject(v)})]
         elsif obj.class == Java::ComMongodb::BasicDBList
           obj.arrayify.map{|v| from_dbobject(v)}
+        elsif obj.class == Java::JavaUtil::Date
+          Time.at(obj.get_time/1000.0)
         else
           obj
         end
@@ -140,7 +150,7 @@ module Mongo
       end
 
       def array_to_dblist ary
-        list = Java::ComMongodb::DBObject[ary.length].new
+        list = [] #Java::ComMongodb::DBObject[ary.length].new
         ary.each_with_index do |ele, i|
           list[i] = to_dbobject(ele)
         end

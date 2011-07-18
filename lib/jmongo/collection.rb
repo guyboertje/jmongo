@@ -251,7 +251,7 @@ module Mongo
     #   and the operation fails.
     #
     # @core remove remove-instance_method
-    def remove(selector={}, opts={})
+    def remove(selector={}, options={})
       safe = (options[:safe] || false)
       remove_documents(selector,safe)
     end
