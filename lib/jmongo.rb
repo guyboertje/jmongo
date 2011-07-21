@@ -87,7 +87,7 @@ module Mongo
 
 end  # module Mongo
 
-require 'json' unless defined?(JSON)
+#require 'json' unless defined?(JSON)
 
 Mongo.require_all_jars_relative_to(__FILE__)
 
