@@ -20,7 +20,7 @@ module Mongo
     include Mongo::JavaImpl::Connection_::InstanceMethods
      extend Mongo::JavaImpl::Connection_::ClassMethods
 
-    attr_reader :connection
+    attr_reader :connection, :logger, :auths
 
     def initialize host = nil, port = nil, opts = {}
       if opts.has_key?(:new_from_uri)
@@ -35,6 +35,8 @@ module Mongo
         options.socketTimeout = opts[:timeout].to_i * 1000 || 5000
         @connection = JMongo::Mongo.new(server_address, options)
       end
+      @logger = opts[:logger]
+      @auths = opts.fetch(:auths, [])
     end
 
     def self.paired(nodes, opts={})
@@ -61,7 +63,11 @@ module Mongo
     # @raise [AuthenticationError] raises an exception if any one
     #   authentication fails.
     def apply_saved_authentication
-      raise_not_implemented
+      return false if @auths.empty?
+      @auths.each do |auth|
+        self[auth['db_name']].authenticate(auth['username'], auth['password'], false)
+      end
+      true
     end
 
     # Save an authentication to this connection. When connecting,
@@ -75,7 +81,13 @@ module Mongo
     #
     # @return [Hash] a hash representing the authentication just added.
     def add_auth(db_name, username, password)
-      raise_not_implemented
+      remove_auth(db_name)
+      auth = {}
+      auth['db_name']  = db_name
+      auth['username'] = username
+      auth['password'] = password
+      @auths << auth
+      auth
     end
 
     # Remove a saved authentication for this connection.
@@ -84,14 +96,20 @@ module Mongo
     #
     # @return [Boolean]
     def remove_auth(db_name)
-      raise_not_implemented
+      return unless @auths
+      if @auths.reject! { |a| a['db_name'] == db_name }
+        true
+      else
+        false
+      end
     end
 
     # Remove all authenication information stored in this connection.
     #
     # @return [true] this operation return true because it always succeeds.
     def clear_auths
-      raise_not_implemented
+      @auths = []
+      true
     end
 
     # Return a hash with all database names

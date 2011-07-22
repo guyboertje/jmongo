@@ -24,20 +24,29 @@ module Mongo
         end
       end
       module ClassMethods
+        URI_RE = /^mongodb:\/\/(([-.\w]+):([^@]+)@)?([-.\w]+)(:([\w]+))?(\/([-\w]+))?/
+        OPTS_KEYS = %W[maxpoolsize waitqueuemultiple waitqueuetimeoutms connecttimeoutms sockettimeoutms
+                       autoconnectretry slaveok safe w wtimeout fsync]
+
         def _from_uri uri, opts={}
           optarr = []
-          unless uri =~ /^mongodb:\/\/(([-.\w]+):([^@]+)@)?([-.\w]+)(:([\w]+))?(\/([-\w]+))?/
+          unless uri =~ URI_RE
             raise MongoArgumentError, "MongoDB URI incorrect"
           end
           pieces = uri.split("//")
           extra = pieces.last.count('/') == 0 ? "/" : ""
-          opts.each{|k,v| (optarr << "#{k}=#{v.to_s}") unless v.nil?}
+          opts.each do|k,v|
+            if OPTS_KEYS.include?(k.to_s) && !v.nil?
+              (optarr << "#{k}=#{v}")
+            end
+          end
           unless optarr.empty?
             uri << "#{extra}?" << optarr.join("&")
           end
           puts "+++++++++++++++ _from_uri uri: #{uri.inspect}"
-          puri = Java::ComMongodb::MongoURI.new(uri)
-          new("",0,{:new_from_uri=>puri.connect})
+          muri = Java::ComMongodb::MongoURI.new(uri)
+          opts[:new_from_uri] = JMongo::Mongo.new(muri)
+          new("",0,opts)
         end
       end
     end

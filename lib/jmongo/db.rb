@@ -29,15 +29,23 @@ module Mongo
     end
 
     def authenticate(username, password, save_auth=true)
-      raise_not_implemented
+      begin
+        succeeded = @j_db.authenticate(username, password)
+        if save_auth && succeeded
+          @connection.add_auth(@name, username, password)
+        end
+      rescue => e
+        succeeded = false
+      end
+      succeeded
     end
 
     def add_user(username, password)
-      raise_not_implemented
+      @j_db.add_user(username, password)
     end
 
     def remove_user(username)
-      raise_not_implemented
+      @j_db.remove_user(username)
     end
 
     def logout
