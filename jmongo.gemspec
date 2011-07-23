@@ -33,4 +33,7 @@ Gem::Specification.new do |s|
   else
     s.add_dependency(%q<bones>, [">= 3.4.1"])
   end
+
+  s.add_development_dependency 'awesome_print'
+  s.add_development_dependency 'rspec'
 end
