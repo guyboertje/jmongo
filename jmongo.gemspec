@@ -7,7 +7,7 @@ Gem::Specification.new do |s|
   s.email             = ["cremes@mac.com", "guyboertje@gmail.com", "lee.m.henson@gmail.com"]
   s.summary           = "Thin ruby wrapper around Mongo Java Driver; for JRuby only"
   s.description       = %q{Thin jruby wrapper around Mongo Java Driver}
-  s.homepage          = 'http://github.com/chuckremes/jmongo'
+  s.homepage          = 'http://github.com/guyboertje/jmongo'
 
   s.executables       =  ["jmongo"]
   s.extra_rdoc_files  = ["History.txt", "README.txt", "bin/jmongo", "LICENSE.txt"]
