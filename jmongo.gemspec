@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name              = 'jmongo'
-  s.version           = '1.0.0'
+  s.version           = '1.0.1'
   s.date              = '2011-09-15'
   s.platform          = Gem::Platform::RUBY
   s.authors           = ["Chuck Remes","Guy Boertje", "Lee Henson"]
@@ -8,12 +8,6 @@ Gem::Specification.new do |s|
   s.summary           = "Thin ruby wrapper around Mongo Java Driver; for JRuby only"
   s.description       = %q{Thin jruby wrapper around Mongo Java Driver}
   s.homepage          = 'http://github.com/guyboertje/jmongo'
-
-  s.executables       =  ["jmongo"]
-  s.extra_rdoc_files  = ["History.txt", "README.txt", "bin/jmongo", "LICENSE.txt"]
-  s.rdoc_options      = ["--main", "README.txt"]
-  s.rubyforge_project = %q{jmongo}
-  s.test_files        = `git ls-files -- {test,spec,features}/*`.split("\n")
 
   # = MANIFEST =
   s.files = %w[
@@ -41,7 +35,11 @@ Gem::Specification.new do |s|
   ]
   # = MANIFEST =
 
-  s.add_development_dependency 'awesome_print', '~> 0.4'
-  s.add_development_dependency 'fuubar',        '~> 0.0'
-  s.add_development_dependency 'rspec',         '~> 2.6'
+  s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
+  s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
+
+  s.add_dependency 'require_all',                 '~> 1.2'
+  s.add_development_dependency 'awesome_print',   '~> 0.4'
+  s.add_development_dependency 'fuubar',          '~> 0.0'
+  s.add_development_dependency 'rspec',           '~> 2.6'
 end
