@@ -92,7 +92,7 @@ end  # module Mongo
 Mongo.require_all_jars_relative_to(__FILE__)
 
 # import all of the java packages we'll need into the JMongo namespace
-require 'jmongo_jext'
+require 'jmongo/jmongo_jext'
 
 Mongo.require_all_libs_relative_to(__FILE__)
 
@@ -104,5 +104,4 @@ module Mongo
   module Constants
     DEFAULT_BATCH_SIZE = 100
   end
-
 end
