@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name              = 'jmongo'
-  s.version           = '1.0.1'
+  s.version           = '1.0.2'
   s.date              = '2011-09-15'
   s.platform          = Gem::Platform::RUBY
   s.authors           = ["Chuck Remes","Guy Boertje", "Lee Henson"]
@@ -11,8 +11,6 @@ Gem::Specification.new do |s|
 
   # = MANIFEST =
   s.files = %w[
-    Gemfile
-    Gemfile.lock
     History.txt
     LICENSE.txt
     README.txt
