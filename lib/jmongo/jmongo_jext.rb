@@ -31,7 +31,7 @@ end
 
 class Java::ComMongodb::BasicDBList
   def arrayify
-    self.to_map.to_hash.values.to_a
+    self.to_array
   end
 end
 
@@ -67,6 +67,7 @@ module BSON
   ObjectId = Java::OrgBsonTypes::ObjectId
 
   OrderedHash = Java::ComMongodb::BasicDBObject
+
   class Java::ComMongodb::BasicDBObject
     def get(key)
       self.java_send(:get,key.to_s)
