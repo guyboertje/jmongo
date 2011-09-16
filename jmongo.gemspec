@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name              = 'jmongo'
-  s.version           = '1.0.2'
-  s.date              = '2011-09-15'
+  s.version           = '1.0.3'
+  s.date              = '2011-09-16'
   s.platform          = Gem::Platform::RUBY
   s.authors           = ["Chuck Remes","Guy Boertje", "Lee Henson"]
   s.email             = ["cremes@mac.com", "guyboertje@gmail.com", "lee.m.henson@gmail.com"]
