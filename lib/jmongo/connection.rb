@@ -20,21 +20,26 @@ module Mongo
     include Mongo::JavaImpl::Connection_::InstanceMethods
      extend Mongo::JavaImpl::Connection_::ClassMethods
 
-    attr_reader :connection, :logger, :auths
+    attr_reader :connection, :connector, :logger, :auths
 
+    DEFAULT_PORT = 27017
+    
     def initialize host = nil, port = nil, opts = {}
       if opts.has_key?(:new_from_uri)
-        @connection = opts[:new_from_uri]
+        @options = opts
+        @mongo_uri = opts[:new_from_uri]
+        @connection = JMongo::Mongo.new(@mongo_uri)
       else
         @logger = opts[:logger]
         @host = host || 'localhost'
         @port = port || 27017
-        server_address = JMongo::ServerAddress.new @host, @port
-        options = JMongo::MongoOptions.new
-        options.connectionsPerHost = opts[:pool_size] || 1
-        options.socketTimeout = opts[:timeout].to_i * 1000 || 5000
-        @connection = JMongo::Mongo.new(server_address, options)
+        @server_address = JMongo::ServerAddress.new @host, @port
+        @options = JMongo::MongoOptions.new
+        @options.connectionsPerHost = opts[:pool_size] || 1
+        @options.socketTimeout = opts[:timeout].to_i * 1000 || 5000
+        @connection = JMongo::Mongo.new(@server_address, @options)
       end
+      @connector = @connection.connector
       @logger = opts[:logger]
       @auths = opts.fetch(:auths, [])
     end
@@ -175,12 +180,20 @@ module Mongo
     def get_request_id
       raise_not_implemented
     end
+  
+    # Checks if a server is alive. This command will return immediately 
+    # even if the server is in a lock.
+    #
+    # @return [Hash]
+    def ping
+      self["admin"].command({:ping => 1})
+    end
 
     # Get the build information for the current connection.
     #
     # @return [Hash]
     def server_info
-      raise_not_implemented
+      self["admin"].command({:buildinfo => 1})
     end
 
     # Get the build version of the current server.
@@ -230,15 +243,27 @@ module Mongo
     end
 
     def connect_to_master
-      raise_not_implemented
+      connect
     end
 
     def connected?
-      raise_not_implemented
+      @connection && @connector && @connector.is_open
     end
 
+    def connect
+      close
+      if @mongo_uri
+        @connection = JMongo::Mongo.new(@mongo_uri)
+      else
+        @connection = JMongo::Mongo.new(@server_address, @options)
+      end
+      @connector = @connection.connector
+    end
+    alias :reconnect :connect
+
     def close
-      raise_not_implemented
+      @connection.close if @connection
+      @connection = @connector = nil
     end
 
   end # class Connection

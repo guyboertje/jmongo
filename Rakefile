@@ -116,3 +116,75 @@ task :validate do
     exit!
   end
 end
+
+require 'rake/testtask'
+
+task :test do
+  puts "\nTo test the pure jruby driver: \nrake test:jruby\n\n"
+end
+
+namespace :test do
+
+  desc "Test the driver using pure jruby (no C extension)"
+  task :jruby do
+    ENV['C_EXT'] = nil
+    if ENV['TEST']
+      Rake::Task['test:functional'].invoke
+    else
+      Rake::Task['test:unit'].invoke
+      Rake::Task['test:functional'].invoke
+      Rake::Task['test:bson'].invoke
+      Rake::Task['test:pooled_threading'].invoke
+      Rake::Task['test:drop_databases'].invoke
+    end
+  end
+
+  desc "Run the replica set test suite"
+  Rake::TestTask.new(:rs) do |t|
+    t.test_files = FileList['test/replica_sets/*_test.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+
+  Rake::TestTask.new(:unit) do |t|
+    t.test_files = FileList['test/unit/*_test.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+
+  Rake::TestTask.new(:functional) do |t|
+    t.test_files = FileList['test/*_test.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+
+  Rake::TestTask.new(:pooled_threading) do |t|
+    t.test_files = FileList['test/threading/*_test.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+
+  Rake::TestTask.new(:auto_reconnect) do |t|
+    t.test_files = FileList['test/auxillary/autoreconnect_test.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+
+  Rake::TestTask.new(:authentication) do |t|
+    t.test_files = FileList['test/auxillary/authentication_test.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+
+  Rake::TestTask.new(:new_features) do |t|
+    t.test_files = FileList['test/auxillary/1.4_features.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+
+  Rake::TestTask.new(:bson) do |t|
+    t.test_files = FileList['test/bson/*_test.rb']
+    t.verbose    = true
+    t.ruby_opts << '-w'
+  end
+end

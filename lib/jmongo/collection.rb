@@ -402,7 +402,7 @@ module Mongo
       map    = BSON::Code.new(map) unless map.is_a?(BSON::Code)
       reduce = BSON::Code.new(reduce) unless reduce.is_a?(BSON::Code)
 
-      hash = OrderedHash.new
+      hash = BSON::OrderedHash.new
       hash['mapreduce'] = self.name
       hash['map'] = map
       hash['reduce'] = reduce
@@ -494,10 +494,10 @@ module Mongo
     # @return [Array] an array of distinct values.
     def distinct(key, query=nil)
       raise MongoArgumentError unless [String, Symbol].include?(key.class)
-      command = OrderedHash.new
-      command[:distinct] = @name
-      command[:key]      = key.to_s
-      command[:query]    = query
+      command = BSON::OrderedHash.new
+      command['distinct'] = @name
+      command['key']      = key.to_s
+      command['query']    = query
 
       @db.command(command)["values"]
     end
@@ -576,8 +576,8 @@ module Mongo
       when nil
         nil
       else
-        h = OrderedHash.new
-        hint.to_a.each { |k| h[k] = 1 }
+        h = BSON::OrderedHash.new
+        hint.to_a.each { |k| h[k.to_s] = 1 }
         h
       end
     end

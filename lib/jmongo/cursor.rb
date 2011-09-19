@@ -17,91 +17,181 @@ module Mongo
   class Cursor
     include Mongo::JavaImpl::Utils
 
-    attr_reader :j_cursor
+    attr_reader :j_cursor, :collection, :selector, :fields,
+      :order, :hint, :snapshot, :timeout,
+      :full_collection_name, :transformer,
+      :options
 
     def initialize(collection, options={})
+      @collection = collection
       @j_collection = collection.j_collection
-
+      @query_run = false
       @selector   = convert_selector_for_query(options[:selector])
       @fields     = convert_fields_for_query(options[:fields])
-      @admin      = options[:admin]    || false
-      @skip       = options[:skip]     || 0
-      @limit      = options[:limit]    || 0
-      @order      = _sort(options[:order])
+      @admin      = options.fetch(:admin, false)
+      @order      = nil
+      @batch_size = Mongo::Constants::DEFAULT_BATCH_SIZE
+      @skip       = 0
+      @limit      = 0
+      _skip options[:skip]
+      _limit options[:limit]
+      _sort options[:order]
+      _batch_size options[:batch_size]
       @hint       = options[:hint]
       @snapshot   = options[:snapshot]
       @explain    = options[:explain]
       @socket     = options[:socket]
-      @batch_size = options[:batch_size] || Mongo::Constants::DEFAULT_BATCH_SIZE
-      @timeout    = options[:timeout]  || false
-      @tailable   = options[:tailable] || false
+      @timeout    = options.fetch(:timeout, true)
+      @tailable   = options.fetch(:tailable, false)
+      @transformer = options[:transformer]
 
-      #@full_collection_name = "#{@collection.db.name}.#{@collection.name}"
-      @query_run = false
-
+      @full_collection_name = "#{@collection.db.name}.#{@collection.name}"
+      
       spawn_cursor
     end
+
+    def rewind!
+      close
+      @query_run = false
+      spawn_cursor
+    end
+
+    def close
+      @query_run = true
+      @j_cursor.close
+    end
+
+    def cursor_id
+      @j_cursor.get_cursor_id
+    end
+
+    def closed?
+      cursor_id == 0
+    end
+
+    def alive?
+      cursor_id != 0
+    end
+
+    def add_option(opt)
+      check_modifiable
+      @j_cursor.addOption(opt)
+      options
+    end
+
+    def options
+      @j_cursor.getOptions
+    end
+
+    def query_opts
+      warn "The method Cursor#query_opts has been deprecated " +
+        "and will removed in v2.0. Use Cursor#options instead."
+      options
+    end
+
+    def remove_option(opt)
+      check_modifiable
+      @j_cursor.setOptions(options & ~opt)
+      options
+    end
+
     def current_document
-      if !@query_run
-        next_document
-      else
-        from_dbobject(@j_cursor.curr)
-      end
+      _xform(from_dbobject(@j_cursor.curr))
     end
 
     def next_document
-      @query_run = true
-      @j_cursor.has_next? ? from_dbobject(@j_cursor.next) : BSON::OrderedHash.new
+      _xform(has_next? ? __next : BSON::OrderedHash.new)
     end
+    alias :next :next_document
+
+    def _xform(doc)
+      if @transformer.nil?
+        doc
+      else
+        @transformer.call(doc) if doc
+      end
+    end
+    private :_xform
 
     def has_next?
       @j_cursor.has_next?
     end
+
     # iterate directly from the mongo db
     def each
       check_modifiable
-      #raise "Backtrace..."
-      while @j_cursor.has_next?
+      while has_next?
         yield next_document
       end
     end
 
-    def limit(number_to_return=nil)
-      return @limit unless number_to_return
+    def _batch_size(size=nil)
+      return if size.nil?
       check_modifiable
-      raise ArgumentError, "limit requires an integer" unless number_to_return.is_a? Integer
+      raise ArgumentError, "Invalid value for batch_size #{size}; must be 0 or > 1." if size < 0 || size == 1
+      @batch_size = @limit != 0 && size > @limit ? @limit : size
+    end
+    private :_batch_size
 
-      @limit = number_to_return
-      @j_cursor = @j_cursor.limit(@limit)
+    def batch_size(size=nil)
+      _batch_size(size)
+      @j_cursor = @j_cursor.batchSize(@batch_size) if @batch_size
       self
     end
 
-    def skip(number_to_skip=nil)
-      return @skip unless number_to_skip
+    def _limit(number_to_return=nil)
+      return if number_to_return.nil?
+      check_modifiable
+      raise ArgumentError, "limit requires an integer" unless number_to_return.is_a? Integer
+      @limit = number_to_return
+    end
+    private :_limit
+
+    def limit(number_to_return=nil)
+      _limit(number_to_return)
+      wrap_invalid_op do
+        @j_cursor = @j_cursor.limit(@limit) if @limit
+      end
+      self
+    end
+
+    def _skip(number_to_skip=nil)
+      return if number_to_skip.nil?
       check_modifiable
       raise ArgumentError, "skip requires an integer" unless number_to_skip.is_a? Integer
-
       @skip = number_to_skip
-      @j_cursor = @j_cursor.skip(@skip)
+    end
+    private :_skip
+
+    def skip(number_to_skip=nil)
+      _skip(number_to_skip)
+      wrap_invalid_op do
+        @j_cursor = @j_cursor.skip(@skip) if @skip
+      end
       self
     end
 
     def sort(key_or_list, direction=nil)
-      check_modifiable
-      @ord = _sort(key_or_list, direction)
-      @j_cursor = @j_cursor.sort(@ord)
+      _sort(key_or_list, direction)
+      wrap_invalid_op do
+        @j_cursor = @j_cursor.sort(@order) if @order
+      end
       self
     end
 
-    def _sort(key_or_list, direction=nil)
+    def _sort(key_or_list=nil, direction=nil)
       return if key_or_list.nil?
+      check_modifiable
       if !direction.nil?
         order = [[key_or_list, direction]]
+      elsif key_or_list.is_a?(String) || key_or_list.is_a?(Symbol)
+        order = [key_or_list.to_s, 1]
       else
         order = [key_or_list]
       end
-      to_dbobject(Hash[*order.flatten])
+      @order = to_dbobject(Hash[*order.flatten])
     end
+    private :_sort
 
     def size
       @j_cursor.size
@@ -110,9 +200,9 @@ module Mongo
     def count(skip_and_limit = false)
       if skip_and_limit && @skip && @limit
         check_modifiable
-        @j_cursor.skip(@skip).limit(@limit).size
-      else
         @j_cursor.size
+      else
+        @j_cursor.count
       end
     end
 
@@ -123,8 +213,8 @@ module Mongo
     def map(&block)
       ret = []
       check_modifiable
-      while @j_cursor.has_next?
-        ret << block.call(from_dbobject(@j_cursor.next))
+      while has_next?
+        ret << block.call(__next)
       end
       ret
     end
@@ -132,12 +222,22 @@ module Mongo
     def to_a
       ret = []
       check_modifiable
-      while @j_cursor.has_next?
-        ret << from_dbobject(@j_cursor.next)
+      while has_next?
+        ret << __next
       end
       ret
     end
+
+    def to_set
+      Set.new self.to_a
+    end
+
     private
+
+    def __next
+      @query_run = true
+      from_dbobject(@j_cursor.next)
+    end
 
     # Convert the +:fields+ parameter from a single field name or an array
     # of fields names to a hash, with the field names for keys and '1' for each
@@ -166,28 +266,43 @@ module Mongo
       end
     end
 
+    def no_fields?
+      @fields.nil? || @fields.empty?
+    end
+
     def spawn_cursor
-      @j_cursor = @fields.nil? || @fields.empty? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
+      @j_cursor = no_fields? ? @j_collection.find(@selector) :  @j_collection.find(@selector, @fields)
 
       if @j_cursor
         @j_cursor = @j_cursor.sort(@order) if @order
-        @j_cursor = @j_cursor.skip(@skip) if @skip > 0
-        @j_cursor = @j_cursor.limit(@limit) if @limit > 0
-        @j_cursor = @j_cursor.batchSize(@batch_size)
+        @j_cursor = @j_cursor.skip(@skip) if @skip && @skip > 0
+        @j_cursor = @j_cursor.limit(@limit) if @limit && @limit > 0
+        @j_cursor = @j_cursor.batchSize(@batch_size) if @batch_size && @batch_size > 0
 
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
       end
-
+      
       self
     end
 
     def check_modifiable
       if @query_run
-        raise "Cannot modify the query once it has been run or closed."
+        raise_invalid_op
       end
     end
 
+    def wrap_invalid_op
+      begin
+        yield
+      rescue => ex
+        raise_invalid_op
+      end
+    end
+
+    def raise_invalid_op
+      raise InvalidOperation, "Cannot modify the query once it has been run or closed."
+    end
   end # class Cursor
 
 end # module Mongo

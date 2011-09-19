@@ -43,9 +43,7 @@ module Mongo
           unless optarr.empty?
             uri << "#{extra}?" << optarr.join("&")
           end
-          puts "+++++++++++++++ _from_uri uri: #{uri.inspect}"
-          muri = Java::ComMongodb::MongoURI.new(uri)
-          opts[:new_from_uri] = JMongo::Mongo.new(muri)
+          opts[:new_from_uri] = Java::ComMongodb::MongoURI.new(uri)
           new("",0,opts)
         end
       end
@@ -53,16 +51,20 @@ module Mongo
 
     module Db_
       SYSTEM_NAMESPACE_COLLECTION = "system.namespaces"
-      #SYSTEM_INDEX_COLLECTION = "system.indexes"
-      #SYSTEM_PROFILE_COLLECTION = "system.profile"
-      #SYSTEM_USER_COLLECTION = "system.users"
-      #SYSTEM_COMMAND_COLLECTION = "$cmd"
+      SYSTEM_PROFILE_COLLECTION = "system.profile"
 
       private
+
       def exec_command(cmd)
-        cmd_res = @j_db.command(to_dbobject({cmd => true}))
+        cmd_hash = cmd.kind_of?(Hash) ? cmd : {cmd => 1}
+        cmd_res = @j_db.command(to_dbobject(cmd_hash))
         from_dbobject(cmd_res)
       end
+
+      def do_eval(string, *args)
+        @j_db.do_eval(string, *args)
+      end
+
       def has_coll(name)
         @j_db.collection_exists(name)
       end
