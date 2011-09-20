@@ -39,6 +39,15 @@ class Java::ComMongodb::BasicDBList
   end
 end
 
+#--------------------------------------------------
+class String
+
+  #:nodoc:
+  def to_bson_code
+    BSON::Code.new(self)
+  end
+end
+
 module BSON
   # add missing BSON::ObjectId ruby methods
   class Java::OrgBsonTypes::ObjectId
@@ -90,14 +99,40 @@ module BSON
 
   class Code < String
     # copied verbatim from ruby driver
-    # Hash mapping identifiers to their values
-    attr_accessor :scope
+        # Hash mapping identifiers to their values
+    attr_accessor :scope, :code
+
+    # Wrap code to be evaluated by MongoDB.
+    #
+    # @param [String] code the JavaScript code.
+    # @param [Hash] a document mapping identifiers to values, which
+    #   represent the scope in which the code is to be executed.
     def initialize(code, scope={})
-      super(code)
+      @code  = code
       @scope = scope
+
+      unless @code.is_a?(String)
+        raise ArgumentError, "BSON::Code must be in the form of a String; #{@code.class} is not allowed."
+      end
+    end
+
+    def length
+      @code.length
+    end
+
+    def ==(other)
+      self.class == other.class &&
+        @code == other.code && @scope == other.scope
+    end
+
+    def inspect
+      "<BSON::Code:#{object_id} @data=\"#{@code}\" @scope=\"#{@scope.inspect}\">"
+    end
+
+    def to_bson_code
+      self
     end
   end
-
 
   # Generic Mongo Ruby Driver exception class.
   class MongoRubyError < StandardError; end

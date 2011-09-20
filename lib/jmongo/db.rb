@@ -172,8 +172,7 @@ module Mongo
 
       if (check_response && !ok?(result))
         message = "Database command '#{selector.keys.first}' failed: (" + result.map{|k, v| "#{k}: '#{v}'"}.join('; ') + ")."
-        code = result['code'] || result['assertionCode']
-        raise OperationFailure.new(message, code, result)
+        raise OperationFailure.new message
       else
         result
       end
