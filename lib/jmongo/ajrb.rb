@@ -72,13 +72,54 @@ module Mongo
 
     module Collection_
       private
-      def create_indexes(obj,opts)
-        return @j_collection.ensureIndex("#{obj}") if obj.is_a?(String) || obj.is_a?(Symbol)
 
-        obj = Hash[obj] if obj.is_a?(Array)
+      def _create_indexes(obj,opts = nil)
+        if obj.is_a?(String) || obj.is_a?(Symbol)
+          name = obj.to_s
+          @j_collection.ensureIndex(name)
+        else
+          field_spec = parse_index_spec(obj)
+          if opts.respond_to?(:fetch) && (opts[:name] || opts['name'])
+            name = opts.delete(:name) || opts.delete('name')
+          else
+            name = generate_index_name(field_spec)
+          end
+          if opts.respond_to?(:fetch)
+            opts['name'] = name
+            @j_collection.ensureIndex(to_dbobject(field_spec),to_dbobject(opts))
+          else
+            @j_collection.ensureIndex(to_dbobject(field_spec), name, !!(opts))
+          end
+        end
+        name
+      end
 
-        return @j_collection.ensureIndex(to_dbobject(obj),to_dbobject(opts)) if opts.is_a?(Hash)
-        @j_collection.ensureIndex(to_dbobject(obj),generate_index_name(obj),!!(opts))
+      def generate_index_name(spec)
+        indexes = []
+        spec.each_pair do |field, direction|
+          indexes.push("#{field}_#{direction}")
+        end
+        indexes.join("_")
+      end
+
+      def parse_index_spec(spec)
+        field_spec = Hash.new
+        if spec.is_a?(String) || spec.is_a?(Symbol)
+          field_spec[spec.to_s] = 1
+        elsif spec.is_a?(Array) && spec.all? {|field| field.is_a?(Array) }
+          spec.each do |f|
+            if [Mongo::ASCENDING, Mongo::DESCENDING, Mongo::GEO2D].include?(f[1])
+              field_spec[f[0].to_s] = f[1]
+            else
+              raise MongoArgumentError, "Invalid index field #{f[1].inspect}; " +
+                "should be one of Mongo::ASCENDING (1), Mongo::DESCENDING (-1) or Mongo::GEO2D ('2d')."
+            end
+          end
+        else
+          raise MongoArgumentError, "Invalid index specification #{spec.inspect}; " +
+            "should be either a string, symbol, or an array of arrays."
+        end
+        field_spec
       end
 
       def remove_documents(obj, safe=nil)

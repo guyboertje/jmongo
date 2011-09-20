@@ -72,7 +72,8 @@ module Mongo
     def collections_info(coll_name=nil)
       selector = {}
       selector[:name] = full_collection_name(coll_name) if coll_name
-      Cursor.new(Collection.new(self, SYSTEM_NAMESPACE_COLLECTION), :selector => selector)
+      coll = self.collection(SYSTEM_NAMESPACE_COLLECTION)
+      coll.find :selector => selector
     end
 
     def create_collection(name, options={})
@@ -115,14 +116,14 @@ module Mongo
     end
 
     def dereference(dbref)
-      collection(dbref.namespace).find_one("_id" => dbref.object_id)
+      ns = dbref.namespace
+      raise MongoArgumentError, "No namespace for dbref: #{dbref.inspect}"
+      collection(ns).find_one("_id" => dbref.object_id)
     end
 
     def eval(code, *args)
       doc = do_eval(code, *args)
       return unless doc
-      ap "eval ......................................................"
-      ap doc
       return doc['retval']['value'] if doc['retval'] && doc['retval']['value']
       doc['retval']
     end
@@ -140,7 +141,12 @@ module Mongo
     end
 
     def index_information(collection_name)
-      raise_not_implemented
+      sel  = {:ns => full_collection_name(collection_name)}
+      info = {}
+      Cursor.new(Collection.new(SYSTEM_INDEX_COLLECTION, self), :selector => sel).each do |index|
+        info[index['name']] = index
+      end
+      info
     end
 
     def stats

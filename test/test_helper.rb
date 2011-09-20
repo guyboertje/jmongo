@@ -2,6 +2,7 @@ $:.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'rubygems' if RUBY_VERSION < '1.9.0' && ENV['C_EXT']
 require 'jmongo'
 require 'test/unit'
+require 'awesome_print'
 
 def silently
   warn_level = $VERBOSE
@@ -9,6 +10,12 @@ def silently
   result = yield
   $VERBOSE = warn_level
   result
+end
+
+def apr(obj, prefix = '')
+  puts prefix
+  ap obj
+  puts ''
 end
 
 begin

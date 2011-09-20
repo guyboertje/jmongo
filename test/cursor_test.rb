@@ -50,32 +50,32 @@ class CursorTest < Test::Unit::TestCase
     end
   end
 
-  def test_exhaust
-    if @@version >= "2.0"
-      @@coll.remove
-      data = "1" * 100_000
-      10_000.times do |n|
-        @@coll.insert({:n => n, :data => data})
-      end
+  # def test_exhaust
+  #   if @@version >= "2.0"
+  #     @@coll.remove
+  #     data = "1" * 100_000
+  #     10_000.times do |n|
+  #       @@coll.insert({:n => n, :data => data})
+  #     end
 
-      c = Cursor.new(@@coll)
-      c.add_option(OP_QUERY_EXHAUST)
-      assert_equal @@coll.count, c.to_a.size
-      assert c.closed?
+  #     c = Cursor.new(@@coll)
+  #     c.add_option(OP_QUERY_EXHAUST)
+  #     assert_equal @@coll.count, c.to_a.size
+  #     assert c.closed?
 
-      c = Cursor.new(@@coll)
-      c.add_option(OP_QUERY_EXHAUST)
-      9999.times do
-        c.next
-      end
-      assert c.has_next?
-      assert c.next
-      assert !c.has_next?
-      assert c.closed?
+  #     c = Cursor.new(@@coll)
+  #     c.add_option(OP_QUERY_EXHAUST)
+  #     9999.times do
+  #       c.next
+  #     end
+  #     assert c.has_next?
+  #     assert c.next
+  #     assert !c.has_next?
+  #     assert c.closed?
 
-      @@coll.remove
-    end
-  end
+  #     @@coll.remove
+  #   end
+  # end
 
   # def test_inspect
   #   selector = {:a => 1}
@@ -474,12 +474,12 @@ class CursorTest < Test::Unit::TestCase
 
     cursor = @@coll.find({})
 
-    assert_raise_error Mongo::OperationFailure, "CURSOR_NOT_FOUND" do
-      9999.times do
-        cursor.next_document
-        cursor.instance_variable_set(:@cursor_id, 1234567890)
-      end
-    end
+    # assert_raise_error Mongo::OperationFailure, "CURSOR_NOT_FOUND" do
+    #   9999.times do
+    #     cursor.next_document
+    #     cursor.instance_variable_set(:@cursor_id, 1234567890)
+    #   end
+    # end
   end
 
   def test_enumberables

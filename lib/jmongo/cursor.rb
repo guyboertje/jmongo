@@ -46,7 +46,7 @@ module Mongo
       @transformer = options[:transformer]
 
       @full_collection_name = "#{@collection.db.name}.#{@collection.name}"
-      
+
       spawn_cursor
     end
 
@@ -212,7 +212,7 @@ module Mongo
 
     def map(&block)
       ret = []
-      check_modifiable
+      rewind! unless has_next?
       while has_next?
         ret << block.call(__next)
       end
@@ -221,7 +221,7 @@ module Mongo
 
     def to_a
       ret = []
-      check_modifiable
+      rewind! unless has_next?
       while has_next?
         ret << __next
       end
@@ -282,7 +282,7 @@ module Mongo
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
         @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
       end
-      
+
       self
     end
 

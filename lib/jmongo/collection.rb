@@ -139,21 +139,24 @@ module Mongo
       hint   = opts.delete(:hint)
       snapshot = opts.delete(:snapshot)
       batch_size = opts.delete(:batch_size)
-      if opts[:timeout] == false && !block_given?
+      timeout    = (opts.delete(:timeout) == false) ? false : true
+      if timeout == false && !block_given?
         raise ArgumentError, "Timeout can be set to false only when #find is invoked with a block."
       end
-      timeout = block_given? ? (opts.delete(:timeout) || true) : true
+
       if hint
         hint = normalize_hint_fields(hint)
       else
         hint = @hint        # assumed to be normalized already
       end
+
       raise RuntimeError, "Unknown options [#{opts.inspect}]" unless opts.empty?
 
       cursor = Cursor.new(self, :selector => selector, :fields => fields, :skip => skip, :limit => limit,
                           :order => sort, :hint => hint, :snapshot => snapshot, :timeout => timeout, :batch_size => batch_size)
       if block_given?
         yield cursor
+        cursor.close
         nil
       else
         cursor
@@ -325,7 +328,7 @@ module Mongo
     #
     # @core indexes create_index-instance_method
     def create_index(spec, opts={})
-      create_indexes(spec,opts)
+      _create_indexes(spec,opts)
     end
     alias_method :ensure_index, :create_index
 
@@ -335,7 +338,8 @@ module Mongo
     #
     # @core indexes
     def drop_index(name)
-      @j_collection.dropIndexes(name)
+      #raise MongoArgumentError, "Cannot drop index for nil name" unless name
+      @j_collection.dropIndexes(name) if name
     end
 
     # Drop all indexes.
@@ -601,7 +605,10 @@ module Mongo
     #
     # @return [Hash] options that apply to this collection.
     def options
-      @db.collections_info(@name).next_document['options']
+      puts '','collection (created) info'
+      info = @db.collections_info(@name).to_a
+      ap info
+      info.last['options']
     end
 
     # Return stats on the collection. Uses MongoDB's collstats command.
@@ -639,8 +646,6 @@ module Mongo
 
     private
 
-    def generate_index_name(spec)
-      @j_collection.genIndexName(to_dbobject(spec))
-    end
+
   end
 end

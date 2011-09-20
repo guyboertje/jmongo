@@ -188,7 +188,7 @@ class DBAPITest < Test::Unit::TestCase
     # order of the keys won't be guaranteed thus your sort won't make sense.
     oh = BSON::OrderedHash.new
     oh['a'] = -1
-    assert_raise InvalidSortValueError do 
+    assert_raise InvalidSortValueError do
       docs = @@coll.find({'a' => { '$lt' => 10 }}, :sort => oh).to_a
     end
   end
@@ -293,14 +293,13 @@ class DBAPITest < Test::Unit::TestCase
     assert info.has_key?(name)
     assert_equal info[name]["key"], {"a" => 1}
   ensure
-    ap "test_multiple_index_cols_with_symbols ......................................"
-    ap name
     @@db.drop_index(@@coll.name, name)
   end
 
   def test_index_create_with_symbol
-    assert_equal @@coll.index_information.length, 1
-
+    info = @@coll.index_information
+    assert_equal info.length, 1
+    apr info, 'test_index_create_with_symbol INFO'
     name = @@coll.create_index([['a', 1]])
     info = @@db.index_information(@@coll.name)
     assert_equal name, "a_1"
@@ -310,8 +309,6 @@ class DBAPITest < Test::Unit::TestCase
     assert info.has_key?(name)
     assert_equal info[name]['key'], {"a" => 1}
   ensure
-    ap "test_multiple_index_cols_with_symbols ......................................"
-    ap name
     @@db.drop_index(@@coll.name, name)
   end
 
@@ -324,14 +321,11 @@ class DBAPITest < Test::Unit::TestCase
     assert info.has_key?(name)
     assert_equal info[name]['key'], {"a" => -1, "b" => 1, "c" => -1}
   ensure
-    ap "test_multiple_index_cols_with_symbols ......................................"
-    ap name
     @@db.drop_index(@@coll.name, name)
   end
 
   def test_multiple_index_cols_with_symbols
     name = @@coll.create_index([[:a, DESCENDING], [:b, ASCENDING], [:c, DESCENDING]])
-
     info = @@db.index_information(@@coll.name)
     assert_equal 2, info.length
 
@@ -339,8 +333,6 @@ class DBAPITest < Test::Unit::TestCase
     assert info.has_key?(name)
     assert_equal info[name]['key'], {"a" => -1, "b" => 1, "c" => -1}
   ensure
-    ap "test_multiple_index_cols_with_symbols ......................................"
-    ap name
     @@db.drop_index(@@coll.name, name)
   end
 
@@ -558,7 +550,7 @@ HERE
                       :initial => {"count" => 0}, :reduce => "function (obj, prev) { prev.count++; }")[0]["count"]
 
     finalize = "function (obj) { obj.f = obj.count - 1; }"
-    assert_equal 2, test.group(:initial => {"count" => 0}, 
+    assert_equal 2, test.group(:initial => {"count" => 0},
                       :reduce => "function (obj, prev) { prev.count++; }", :finalize => finalize)[0]["f"]
 
     test.insert("a" => 2, "b" => 3)
