@@ -73,31 +73,44 @@ module Mongo
     module Collection_
       private
 
-      def _create_indexes(obj,opts = nil)
+      def name_from opts
+        return unless (opts[:name] || opts['name'])
+        opts.delete(:name) || opts.delete('name')
+      end
+
+      def _drop_index(spec)
+        name = generate_index_name(parse_index_spec(spec))
+        @j_collection.dropIndexes(name)
+      end
+
+      def _create_indexes(obj,opts = {})
+        name = name_from(opts)
+        field_spec = parse_index_spec(obj)
+        opts[:dropDups] = opts[:drop_dups] if opts[:drop_dups]
         if obj.is_a?(String) || obj.is_a?(Symbol)
-          name = obj.to_s
-          @j_collection.ensureIndex(name)
-        else
-          field_spec = parse_index_spec(obj)
-          if opts.respond_to?(:fetch) && (opts[:name] || opts['name'])
-            name = opts.delete(:name) || opts.delete('name')
+          name = obj.to_s unless name
+        end
+        name = generate_index_name(field_spec) unless name
+        opts['name'] = name
+        begin
+          @j_collection.ensureIndex(to_dbobject(field_spec),to_dbobject(opts))
+        rescue => e
+          if opts[:dropDups] && e.message =~ /E11000/
+            # NOP. If the user is intentionally dropping dups, we can ignore duplicate key errors.
           else
-            name = generate_index_name(field_spec)
-          end
-          if opts.respond_to?(:fetch)
-            opts['name'] = name
-            @j_collection.ensureIndex(to_dbobject(field_spec),to_dbobject(opts))
-          else
-            @j_collection.ensureIndex(to_dbobject(field_spec), name, !!(opts))
+            msg = "Failed to create index #{field_spec.inspect} with the following error: #{e.message}"
+            raise Mongo::OperationFailure, msg
           end
         end
         name
       end
 
       def generate_index_name(spec)
+        return spec.to_s if spec.is_a?(String) || spec.is_a?(Symbol)
         indexes = []
         spec.each_pair do |field, direction|
-          indexes.push("#{field}_#{direction}")
+          dir = sort_value(field,direction)
+          indexes.push("#{field}_#{dir}")
         end
         indexes.join("_")
       end
@@ -179,17 +192,36 @@ module Mongo
 
       def from_dbobject obj
         # for better upstream compatibility make the objects into ruby hash or array
-        if obj.class == Java::ComMongodb::BasicDBObject
+        case obj
+        when Java::ComMongodb::BasicDBObject
           h = obj.hashify
           Hash[h.keys.zip(h.values.map{|v| from_dbobject(v)})]
-        elsif obj.class == Java::ComMongodb::BasicDBList
+        when Java::ComMongodb::BasicDBList
           obj.arrayify.map{|v| from_dbobject(v)}
-        elsif obj.class == Java::JavaUtil::Date
+        when Java::JavaUtil::ArrayList 
+          obj.map{|v| from_dbobject(v)}
+        when Java::JavaUtil::Date
           Time.at(obj.get_time/1000.0)
         else
           obj
         end
       end
+
+      def sort_value(key, value)
+        val = value.to_s.downcase
+        return val if val == '2d'
+        direction = SortingHash[val]
+        return direction if direction != 0
+        raise InvalidSortValueError.new(
+          "for key: #{key}, #{value} was supplied as a sort direction when acceptable values are: " +
+          "Mongo::ASCENDING, 'ascending', 'asc', :ascending, :asc, 1, Mongo::DESCENDING, " +
+          "'descending', 'desc', :descending, :desc, -1.")
+      end
+
+      SortingHash = Hash.new(0).merge!(
+        "ascending" => 1, "asc" => 1, "1" => 1,
+        "descending" => -1, "desc" => -1, "-1" => -1
+      )
 
       private
 

@@ -91,7 +91,19 @@ module BSON
 
   DBRef = Java::ComMongodb::DBRef
   MaxKey = Java::OrgBsonTypes::MaxKey
+
+  class MaxKey
+    def ==(obj)
+      obj.class == self.class
+    end
+  end
+
   MinKey = Java::OrgBsonTypes::MinKey
+  class MinKey
+    def ==(obj)
+      obj.class == self.class
+    end
+  end
 
   ObjectId = Java::OrgBsonTypes::ObjectId
 

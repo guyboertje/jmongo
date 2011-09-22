@@ -35,30 +35,14 @@ module Mongo
     # @return [Collection]
     #
     # @core collections constructor_details
-    def initialize(db, name, pk_factory=nil)
-      case name
-      when Symbol, String
-      else
-        raise TypeError, "new_name must be a string or symbol"
-      end
+    def initialize(db, name, pk_factory=nil, j_collection=nil)
+      @name = validate_name(name)
 
-      name = name.to_s
-
-      if name.empty? or name.include? ".."
-        raise Mongo::InvalidNSName, "collection names cannot be empty"
-      end
-      if name.include? "$"
-        raise Mongo::InvalidNSName, "collection names must not contain '$'" unless name =~ /((^\$cmd)|(oplog\.\$main))/
-      end
-      if name.match(/^\./) or name.match(/\.$/)
-        raise Mongo::InvalidNSName, "collection names must not start or end with '.'"
-      end
-
-      @db, @j_db, @name  = db, db.j_db, name
+      @db, @j_db  = db, db.j_db
       @connection = @db.connection
       @pk_factory = pk_factory || BSON::ObjectId
       @hint = nil
-      @j_collection = @j_db.getCollection @name
+      @j_collection = j_collection || @j_db.get_collection(@name)
     end
 
     # Return a sub-collection of this collection by name. If 'users' is a collection, then
@@ -338,8 +322,8 @@ module Mongo
     #
     # @core indexes
     def drop_index(name)
-      #raise MongoArgumentError, "Cannot drop index for nil name" unless name
-      @j_collection.dropIndexes(name) if name
+      raise MongoArgumentError, "Cannot drop index for nil name" unless name
+      _drop_index(name)
     end
 
     # Drop all indexes.
@@ -570,25 +554,10 @@ module Mongo
     #
     # @raise [Mongo::InvalidNSName] if +new_name+ is an invalid collection name.
     def rename(new_name)
-      case new_name
-      when Symbol, String
-      else
-        raise TypeError, "new_name must be a string or symbol"
-      end
+      name = validate_name(new_name)
 
-      new_name = new_name.to_s
-
-      if new_name.empty? or new_name.include? ".."
-        raise Mongo::InvalidNSName, "collection names cannot be empty"
-      end
-      if new_name.include? "$"
-        raise Mongo::InvalidNSName, "collection names must not contain '$'"
-      end
-      if new_name.match(/^\./) or new_name.match(/\.$/)
-        raise Mongo::InvalidNSName, "collection names must not start or end with '.'"
-      end
-
-      @db.rename_collection(@name, new_name)
+      @db.rename_collection(@name, name)
+      @name = name
     end
 
     # Get information on the indexes for this collection.
@@ -629,6 +598,23 @@ module Mongo
 
     protected
 
+    def validate_name(new_name)
+      raise TypeError, "new_name must be a string like" unless new_name.respond_to?(:to_s)
+
+      name = new_name.to_s
+
+      if name.empty? || name.include?("..")
+        raise Mongo::InvalidNSName, "collection names cannot be empty"
+      end
+      if name.include? "$"
+        raise Mongo::InvalidNSName, "collection names must not contain '$'" unless name =~ /((^\$cmd)|(oplog\.\$main))/
+      end
+      if name.match(/^\./) || name.match(/\.$/)
+        raise Mongo::InvalidNSName, "collection names must not start or end with '.'"
+      end
+      name
+    end
+
     def normalize_hint_fields(hint)
       case hint
       when String
@@ -643,9 +629,5 @@ module Mongo
         h
       end
     end
-
-    private
-
-
   end
 end

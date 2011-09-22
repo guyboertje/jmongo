@@ -58,9 +58,7 @@ module Mongo
     end
 
     def collection_names
-      names = collections_info.to_a.collect { |doc| doc['name'] || '' }
-      names = names.delete_if {|name| name.index(@name).nil? || name.index('$')}
-      names.map {|name| name.sub(@name + '.', '')}
+      @j_db.get_collection_names
     end
 
     def collections
@@ -78,7 +76,8 @@ module Mongo
 
     def create_collection(name, options={})
       begin
-        @j_db.create_collection(name, to_dbobject(options))
+        jc = @j_db.create_collection(name, to_dbobject(options))
+        Collection.new self, name, nil, jc
       rescue NativeException => ex
         raise MongoDBError, "Collection #{name} already exists. " +
             "Currently in strict mode."
@@ -141,9 +140,8 @@ module Mongo
     end
 
     def index_information(collection_name)
-      sel  = {:ns => full_collection_name(collection_name)}
       info = {}
-      Cursor.new(Collection.new(SYSTEM_INDEX_COLLECTION, self), :selector => sel).each do |index|
+      from_dbobject(@j_db.get_collection(collection_name).get_index_info).each do |index|
         info[index['name']] = index
       end
       info

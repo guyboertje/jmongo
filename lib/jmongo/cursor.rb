@@ -185,11 +185,13 @@ module Mongo
       if !direction.nil?
         order = [[key_or_list, direction]]
       elsif key_or_list.is_a?(String) || key_or_list.is_a?(Symbol)
-        order = [key_or_list.to_s, 1]
+        order = [[key_or_list.to_s, 1]]
       else
         order = [key_or_list]
       end
-      @order = to_dbobject(Hash[*order.flatten])
+      hord = {}
+      order.flatten.each_slice(2){|k,v| hord[k] = sort_value(k,v)}
+      @order = to_dbobject(hord)
     end
     private :_sort
 

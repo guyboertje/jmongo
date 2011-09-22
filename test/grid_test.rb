@@ -1,3 +1,4 @@
+__END__
 require './test/test_helper'
 include Mongo
 

@@ -256,18 +256,18 @@ class DBAPITest < Test::Unit::TestCase
     @@db.drop_collection('foobar')
     @@db.strict = true
 
-    #begin
+    begin
       coll = @@db.create_collection('foobar', :capped => true, :size => 1024)
       options = coll.options()
       assert_equal 'foobar', options['create']
       assert_equal true, options['capped']
       assert_equal 1024, options['size']
-    #rescue => ex
-    #  @@db.drop_collection('foobar')
-    #  fail "did not expect exception \"#{ex}\""
-    #ensure
+    rescue => ex
+     @@db.drop_collection('foobar')
+     fail "did not expect exception \"#{ex}\""
+    ensure
       @@db.strict = false
-    #end
+    end
   end
 
   def test_collection_options_are_passed_to_the_existing_ones
