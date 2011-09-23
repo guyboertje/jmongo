@@ -14,6 +14,7 @@ module JMongo
   import com.mongodb.MongoOptions
   import com.mongodb.ServerAddress
   import com.mongodb.WriteConcern
+  import com.mongodb.WriteResult
   import com.mongodb.MongoException
   import com.mongodb.MongoURI
 end

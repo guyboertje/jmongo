@@ -212,8 +212,8 @@ module Mongo
       doc_or_docs = [doc_or_docs] unless doc_or_docs.kind_of?(Array)
       doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
       safe = (options[:safe] || false)
-      result = insert_documents(doc_or_docs,safe)
-      result.size > 1 ? result : result.first
+      continue = (options[:continue_on_error] || false)
+      insert_documents(doc_or_docs, safe, continue)
     end
     alias_method :<<, :insert
 

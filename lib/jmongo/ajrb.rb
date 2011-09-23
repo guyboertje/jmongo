@@ -146,10 +146,22 @@ module Mongo
         wr.get_error.nil? && wr.get_n > 0
       end
 
-      def insert_documents(obj, safe=nil)
-        dbo = to_dbobject(obj)
-        @j_collection.insert(dbo, write_concern(safe))
-        obj.collect { |o| o['_id'] || o[:_id] }
+      def insert_documents(obj, safe=nil, continue_on_error=false)
+        dbo = to_dbobject([obj].flatten)
+        old_concern = @j_collection.write_concern
+        ins_concern = write_concern(safe)
+        concern_diff = !old_concern.equals(ins_concern)
+        begin
+          @j_collection.write_concern = ins_concern if concern_diff
+          result = from_dbobject(@j_collection.insert(dbo,true).get_last_error(ins_concern)) #, continue_on_error
+        rescue => ex
+          msg = "Failed to insert documents #{obj.inspect} with the following error: #{ex.message}"
+          raise Mongo::OperationFailure, msg
+        ensure
+          @j_collection.write_concern = old_concern if concern_diff
+        end
+        res = result["ok"] == 1.0 ? from_dbobject(dbo) : []
+        res.collect { |o| o[:_id] || o['_id'] }
       end
 
       def find_and_modify_document(query,fields,sort,remove,update,new_,upsert)
@@ -199,12 +211,12 @@ module Mongo
       def from_dbobject obj
         # for better upstream compatibility make the objects into ruby hash or array
         case obj
-        when Java::ComMongodb::BasicDBObject
+        when Java::ComMongodb::BasicDBObject, Java::ComMongodb::CommandResult
           h = obj.hashify
           Hash[h.keys.zip(h.values.map{|v| from_dbobject(v)})]
         when Java::ComMongodb::BasicDBList
           obj.arrayify.map{|v| from_dbobject(v)}
-        when Java::JavaUtil::ArrayList 
+        when Java::JavaUtil::ArrayList
           obj.map{|v| from_dbobject(v)}
         when Java::JavaUtil::Date
           Time.at(obj.get_time/1000.0)
