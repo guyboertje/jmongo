@@ -687,97 +687,81 @@ class TestCollection < Test::Unit::TestCase
     @@test.drop_index("a_1")
   end
 
-  def test_ensure_index_timeout
-    @@db.cache_time = 2
-    coll = @@db['ensure_test']
-    coll.expects(:generate_indexes).twice
-    coll.ensure_index([['a', 1]])
 
-    # These will be cached
-    coll.ensure_index([['a', 1]])
-    coll.ensure_index([['a', 1]])
-    coll.ensure_index([['a', 1]])
-    coll.ensure_index([['a', 1]])
+  # context "Grouping" do
+  #   setup do
+  #     @@test.remove
+  #     @@test.save("a" => 1)
+  #     @@test.save("b" => 1)
+  #     @initial = {"count" => 0}
+  #     @reduce_function = "function (obj, prev) { prev.count += inc_value; }"
+  #   end
 
-    sleep(3)
-    # This won't be, so generate_indexes will be called twice
-    coll.ensure_index([['a', 1]])
-  end
+  #   should "fail if missing required options" do
+  #     assert_raise MongoArgumentError do
+  #       @@test.group(:initial => {})
+  #     end
 
-  context "Grouping" do
-    setup do
-      @@test.remove
-      @@test.save("a" => 1)
-      @@test.save("b" => 1)
-      @initial = {"count" => 0}
-      @reduce_function = "function (obj, prev) { prev.count += inc_value; }"
-    end
+  #     assert_raise MongoArgumentError do
+  #       @@test.group(:reduce => "foo")
+  #     end
+  #   end
 
-    should "fail if missing required options" do
-      assert_raise MongoArgumentError do
-        @@test.group(:initial => {})
-      end
+  #   should "group results using eval form" do
+  #     assert_equal 1, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 0.5}))[0]["count"]
+  #     assert_equal 2, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 1}))[0]["count"]
+  #     assert_equal 4, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 2}))[0]["count"]
+  #   end
 
-      assert_raise MongoArgumentError do
-        @@test.group(:reduce => "foo")
-      end
-    end
+  #   should "finalize grouped results" do
+  #     @finalize = "function(doc) {doc.f = doc.count + 200; }"
+  #     assert_equal 202, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 1}), :finalize => @finalize)[0]["f"]
+  #   end
+  # end
 
-    should "group results using eval form" do
-      assert_equal 1, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 0.5}))[0]["count"]
-      assert_equal 2, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 1}))[0]["count"]
-      assert_equal 4, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 2}))[0]["count"]
-    end
+  # context "Grouping with key" do
+  #   setup do
+  #     @@test.remove
+  #     @@test.save("a" => 1, "pop" => 100)
+  #     @@test.save("a" => 1, "pop" => 100)
+  #     @@test.save("a" => 2, "pop" => 100)
+  #     @@test.save("a" => 2, "pop" => 100)
+  #     @initial = {"count" => 0, "foo" => 1}
+  #     @reduce_function = "function (obj, prev) { prev.count += obj.pop; }"
+  #   end
 
-    should "finalize grouped results" do
-      @finalize = "function(doc) {doc.f = doc.count + 200; }"
-      assert_equal 202, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 1}), :finalize => @finalize)[0]["f"]
-    end
-  end
+  #   should "group" do
+  #     result = @@test.group(:key => :a, :initial => @initial, :reduce => @reduce_function)
+  #     assert result.all? { |r| r['count'] == 200 }
+  #   end
+  # end
 
-  context "Grouping with key" do
-    setup do
-      @@test.remove
-      @@test.save("a" => 1, "pop" => 100)
-      @@test.save("a" => 1, "pop" => 100)
-      @@test.save("a" => 2, "pop" => 100)
-      @@test.save("a" => 2, "pop" => 100)
-      @initial = {"count" => 0, "foo" => 1}
-      @reduce_function = "function (obj, prev) { prev.count += obj.pop; }"
-    end
+  # context "Grouping with a key function" do
+  #   setup do 
+  #     @@test.remove
+  #     @@test.save("a" => 1)
+  #     @@test.save("a" => 2)
+  #     @@test.save("a" => 3)
+  #     @@test.save("a" => 4)
+  #     @@test.save("a" => 5)
+  #     @initial = {"count" => 0}
+  #     @keyf    = "function (doc) { if(doc.a % 2 == 0) { return {even: true}; } else {return {odd: true}} };"
+  #     @reduce  = "function (obj, prev) { prev.count += 1; }"
+  #   end
 
-    should "group" do
-      result = @@test.group(:key => :a, :initial => @initial, :reduce => @reduce_function)
-      assert result.all? { |r| r['count'] == 200 }
-    end
-  end
+  #   should "group results" do
+  #     results = @@test.group(:keyf => @keyf, :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
+  #     assert results[0]['even'] && results[0]['count'] == 2.0
+  #     assert results[1]['odd'] && results[1]['count'] == 3.0
+  #   end
 
-  context "Grouping with a key function" do
-    setup do 
-      @@test.remove
-      @@test.save("a" => 1)
-      @@test.save("a" => 2)
-      @@test.save("a" => 3)
-      @@test.save("a" => 4)
-      @@test.save("a" => 5)
-      @initial = {"count" => 0}
-      @keyf    = "function (doc) { if(doc.a % 2 == 0) { return {even: true}; } else {return {odd: true}} };"
-      @reduce  = "function (obj, prev) { prev.count += 1; }"
-    end
-
-    should "group results" do
-      results = @@test.group(:keyf => @keyf, :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
-      assert results[0]['even'] && results[0]['count'] == 2.0
-      assert results[1]['odd'] && results[1]['count'] == 3.0
-    end
-
-    should "group filtered results" do
-      results = @@test.group(:keyf => @keyf, :cond => {:a => {'$ne' => 2}},
-        :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
-      assert results[0]['even'] && results[0]['count'] == 1.0
-      assert results[1]['odd'] && results[1]['count'] == 3.0
-    end
-  end
+  #   should "group filtered results" do
+  #     results = @@test.group(:keyf => @keyf, :cond => {:a => {'$ne' => 2}},
+  #       :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
+  #     assert results[0]['even'] && results[0]['count'] == 1.0
+  #     assert results[1]['odd'] && results[1]['count'] == 3.0
+  #   end
+  # end
 
   context "A collection with two records" do
     setup do
@@ -819,12 +803,12 @@ class TestCollection < Test::Unit::TestCase
       assert_nil @collection.index_information['a_1']
     end
     
-      should "drop an index which was given a specific name" do
-        @collection.create_index([['a', Mongo::DESCENDING]], {:name => 'i_will_not_fear'})
-        assert @collection.index_information['i_will_not_fear']
-        @collection.drop_index([['a', Mongo::DESCENDING]])
-        assert_nil @collection.index_information['i_will_not_fear']
-      end
+    should "drop an index which was given a specific name" do
+      @collection.create_index([['a', Mongo::DESCENDING]], {:name => 'i_will_not_fear'})
+      assert @collection.index_information['i_will_not_fear']
+      @collection.drop_index([['a', Mongo::DESCENDING]])
+      assert_nil @collection.index_information['i_will_not_fear']
+    end
   
     should "drops an composite index" do
       @collection.create_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
@@ -927,17 +911,6 @@ class TestCollection < Test::Unit::TestCase
       @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
         ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]], :name => 'foo_index')
       assert @collection.index_information['foo_index']
-    end
-
-    should "generate indexes in the proper order" do
-      @collection.expects(:insert_documents) do |sel, coll, safe|
-        assert_equal 'b_1_a_1', sel[:name]
-      end
-      @collection.create_index([['b', 1], ['a', 1]])
-    end
-
-    should "allow multiple calls to create_index" do
-
     end
 
     should "allow creation of multiple indexes" do

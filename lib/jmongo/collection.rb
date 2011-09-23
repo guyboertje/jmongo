@@ -539,9 +539,9 @@ module Mongo
     def distinct(key, query=nil)
       raise MongoArgumentError unless [String, Symbol].include?(key.class)
       if query
-        from_dbobject @j_collection.distinct(key, to_dbobject(query))
+        from_dbobject @j_collection.distinct(key.to_s, to_dbobject(query))
       else
-        from_dbobject @j_collection.distinct(key)
+        from_dbobject @j_collection.distinct(key.to_s)
       end
     end
 
@@ -590,8 +590,13 @@ module Mongo
     # Get the number of documents in this collection.
     #
     # @return [Integer]
-    def count
-      @j_collection.count()
+    def count(opts={})
+      return @j_collection.count() if opts.empty?
+      query = opts[:query] || opts['query'] || {}
+      fields = opts[:fields] || opts['fields'] || {}
+      limit = opts[:limit] || opts['limit'] || 0
+      skip = opts[:skip] || opts['skip'] || 0
+      @j_collection.get_count(to_dbobject(query), to_dbobject(fields), limit, skip)
     end
 
     alias :size :count

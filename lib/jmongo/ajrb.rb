@@ -79,8 +79,14 @@ module Mongo
       end
 
       def _drop_index(spec)
-        name = generate_index_name(parse_index_spec(spec))
-        @j_collection.dropIndexes(name)
+        name = generate_index_name(spec.is_a?(String) || spec.is_a?(Symbol) ? spec : parse_index_spec(spec))
+        idx = @db.index_information(@name).values.select do |entry|
+          entry['name'] == name || name == generate_index_name(entry['key'])
+        end
+        if idx.nil? || idx.empty?
+          raise MongoDBError, "Error with drop_index command for: #{name}"
+        end
+        @j_collection.dropIndexes(idx.first['name'])
       end
 
       def _create_indexes(obj,opts = {})
