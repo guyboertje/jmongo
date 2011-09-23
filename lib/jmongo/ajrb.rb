@@ -148,17 +148,21 @@ module Mongo
 
       def insert_documents(obj, safe=nil, continue_on_error=false)
         dbo = to_dbobject([obj].flatten)
-        old_concern = @j_collection.write_concern
+        ap dbo
+        #old_concern = @j_collection.write_concern
         ins_concern = write_concern(safe)
-        concern_diff = !old_concern.equals(ins_concern)
+        #concern_diff = !old_concern.equals(ins_concern)
         begin
-          @j_collection.write_concern = ins_concern if concern_diff
-          result = from_dbobject(@j_collection.insert(dbo,true).get_last_error(ins_concern)) #, continue_on_error
+          #@j_collection.write_concern = ins_concern if concern_diff
+          meth = @j_collection.java_method :insert, [java.util.List, Java::ComMongodb::WriteConcern, Java::boolean]
+          jres = meth.call(dbo, ins_concern, continue_on_error)
+          result = from_dbobject(jres.get_last_error(ins_concern))
+          ap result
         rescue => ex
           msg = "Failed to insert documents #{obj.inspect} with the following error: #{ex.message}"
           raise Mongo::OperationFailure, msg
         ensure
-          @j_collection.write_concern = old_concern if concern_diff
+          #@j_collection.write_concern = old_concern if concern_diff
         end
         res = result["ok"] == 1.0 ? from_dbobject(dbo) : []
         res.collect { |o| o[:_id] || o['_id'] }
