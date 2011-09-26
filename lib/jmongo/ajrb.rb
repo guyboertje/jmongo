@@ -71,6 +71,10 @@ module Mongo
     end
 
     module Collection_
+
+      DBObject = Java::ComMongodb::DBObject
+      WriteConcern = Java::ComMongodb::WriteConcern
+
       private
 
       def name_from opts
@@ -146,26 +150,55 @@ module Mongo
         wr.get_error.nil? && wr.get_n > 0
       end
 
+      ## Note: refactor when java driver fully supports continue_on_error
       def insert_documents(obj, safe=nil, continue_on_error=false)
-        dbo = to_dbobject([obj].flatten)
-        ap dbo
-        #old_concern = @j_collection.write_concern
-        ins_concern = write_concern(safe)
-        #concern_diff = !old_concern.equals(ins_concern)
-        begin
-          #@j_collection.write_concern = ins_concern if concern_diff
-          meth = @j_collection.java_method :insert, [java.util.List, Java::ComMongodb::WriteConcern, Java::boolean]
-          jres = meth.call(dbo, ins_concern, continue_on_error)
-          result = from_dbobject(jres.get_last_error(ins_concern))
-          ap result
-        rescue => ex
-          msg = "Failed to insert documents #{obj.inspect} with the following error: #{ex.message}"
-          raise Mongo::OperationFailure, msg
-        ensure
-          #@j_collection.write_concern = old_concern if concern_diff
+        out = []
+        to_do = [obj].flatten
+        concern = write_concern(safe)
+        if continue_on_error
+          to_do.each do |doc|
+            res = _insert_one(doc, concern)
+            break if !continue_on_error && res.nil?
+            out << res if res
+          end
+          if to_do.size != out.size
+            msg = "Failed to insert document #{obj.inspect}, duplicate key"
+            raise(Mongo::OperationFailure, msg)
+          end
+        else
+          begin
+            dbo = to_dbobject(to_do)
+            out = dbo
+            @j_collection.insert( dbo, concern )
+          rescue => ex
+            if ex.message =~ /E11000/
+              msg = "Failed to insert document #{obj.inspect}, duplicate key"
+              raise(Mongo::OperationFailure, msg)
+            else
+              msg = "Failed to insert document #{obj.inspect} db error: #{ex.message}"
+              raise Mongo::MongoDBError, msg
+            end
+          end
         end
-        res = result["ok"] == 1.0 ? from_dbobject(dbo) : []
-        res.collect { |o| o[:_id] || o['_id'] }
+        out
+      end
+
+      def _insert_one(obj, concern)
+        one_obj = [obj].flatten.first
+        dbo = to_dbobject(one_obj)
+        begin
+          jres = @j_collection.insert( dbo, concern )
+          result = from_dbobject(jres.get_last_error(concern))
+        rescue => ex
+          if ex.message =~ /E11000/ #noop duplicate key
+            result = {'err'=>ex.message}
+          else
+            msg = "Failed to insert document #{obj.inspect} db error: #{ex.message}"
+            raise Mongo::MongoDBError, msg
+          end
+        end
+        doc = from_dbobject(dbo)
+        result["err"] =~ /E11000/ ? nil : doc
       end
 
       def find_and_modify_document(query,fields,sort,remove,update,new_,upsert)
