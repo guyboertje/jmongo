@@ -77,10 +77,10 @@ module Mongo
     def create_collection(name, options={})
       begin
         jc = @j_db.create_collection(name, to_dbobject(options))
-        Collection.new self, name, nil, jc
+        Collection.new self, name, {}, jc
       rescue NativeException => ex
-        raise MongoDBError, "Collection #{name} already exists. " +
-            "Currently in strict mode."
+        raise MongoDBError, "Collection #{name} creation error: " +
+            ex.message
       end
     end
 

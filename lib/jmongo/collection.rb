@@ -35,12 +35,29 @@ module Mongo
     # @return [Collection]
     #
     # @core collections constructor_details
-    def initialize(db, name, pk_factory=nil, j_collection=nil)
-      @name = validate_name(name)
+    #db, name, pk_factory=nil, j_collection=nil
+    def initialize(*args)
+      j_collection = nil
+      opts = {}
+      if args.size == 4
+        j_collection = args.pop
+      end
+      if args.size == 3
+        opts = args.pop
+      end
+      if args.size < 2
+        raise ArgumentError.new("Must supply at least name and db parameters")
+      end
+      if args.first.respond_to?('collection_names')
+        db, name = args
+      else
+        name, db = args
+      end
 
+      @name = validate_name(name)
       @db, @j_db  = db, db.j_db
       @connection = @db.connection
-      @pk_factory = pk_factory || BSON::ObjectId
+      @pk_factory = opts[:pk] || BSON::ObjectId
       @hint = nil
       @j_collection = j_collection || @j_db.get_collection(@name)
     end
@@ -59,6 +76,9 @@ module Mongo
     def [](name)
     end
 
+    def capped?
+      @j_collection.isCapped
+    end
     # Set a hint field for query optimizer. Hint may be a single field
     # name, array of field names, or a hash (preferably an [OrderedHash]).
     # If using MongoDB > 1.1, you probably don't ever need to set a hint.

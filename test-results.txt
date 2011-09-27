@@ -1,0 +1,8 @@
+Loaded suite ./test/collection_test
+Started
+...
+Finished in 0.042000 seconds.
+
+3 tests, 7 assertions, 0 failures, 0 errors, 0 skips
+
+Test run options: --seed 23213

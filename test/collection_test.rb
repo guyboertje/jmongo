@@ -3,6 +3,9 @@ require './test/test_helper'
 class TestCollection < Test::Unit::TestCase
   @@connection ||= standard_connection(:op_timeout => 10)
   @@db   = @@connection.db(MONGO_TEST_DB)
+  @@db.collection_names.each do |n|
+    @@db.drop_collection(n) unless n =~ /system/
+  end
   @@test = @@db.collection("test")
   @@version = @@connection.server_version
 
@@ -11,6 +14,8 @@ class TestCollection < Test::Unit::TestCase
   end
 
   def test_capped_method
+    @@db.drop_collection('normal')
+
     @@db.create_collection('normal')
     assert !@@db['normal'].capped?
     @@db.drop_collection('normal')
@@ -42,14 +47,12 @@ class TestCollection < Test::Unit::TestCase
   end
 
   def test_pk_factory_on_collection
-    @coll = Collection.new('foo', @@db, TestPK)
-    assert_equal TestPK, @coll.pk_factory
-
-
     @coll2 = Collection.new('foo', @@db, :pk => TestPK)
     assert_equal TestPK, @coll2.pk_factory
   end
+end
 
+__END__
   def test_valid_names
     assert_raise Mongo::InvalidNSName do
       @@db["te$t"]
