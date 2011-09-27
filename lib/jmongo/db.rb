@@ -31,6 +31,7 @@ module Mongo
       @connection = connection
       @j_db = @connection.connection.get_db db_name
       @pk_factory = options[:pk]
+      @strict = options.fetch(:strict, false)
     end
 
     def authenticate(username, password, save_auth=true)
@@ -75,17 +76,22 @@ module Mongo
     end
 
     def create_collection(name, options={})
-      begin
-        jc = @j_db.create_collection(name, to_dbobject(options))
-        Collection.new self, name, {}, jc
-      rescue NativeException => ex
-        raise MongoDBError, "Collection #{name} creation error: " +
-            ex.message
+      if collection_names.include?(name)
+        raise MongoDBError, "Collection #{name} already exists. Currently in strict mode." if @strict
+        collection(name, options)
+      else
+        begin
+          jc = @j_db.create_collection(name, to_dbobject(options))
+          Collection.new self, name, options, jc
+        rescue NativeException => ex
+          raise MongoDBError, "Collection #{name} creation error: " +
+              ex.message
+        end
       end
     end
 
-    def collection(name)
-      Collection.new self, name
+    def collection(name, options = {})
+      Collection.new self, name, options
     end
     alias_method :[], :collection
 
@@ -185,6 +191,9 @@ module Mongo
     def full_collection_name(collection_name)
       "#{@name}.#{collection_name}"
     end
+
+    # Returns the value of the +strict+ flag.
+    def strict?; @strict; end
 
     # The primary key factory object (or +nil+).
     #

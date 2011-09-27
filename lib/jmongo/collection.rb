@@ -38,12 +38,12 @@ module Mongo
     #db, name, pk_factory=nil, j_collection=nil
     def initialize(*args)
       j_collection = nil
-      opts = {}
+      @opts = {}
       if args.size == 4
         j_collection = args.pop
       end
       if args.size == 3
-        opts = args.pop
+        @opts = args.pop
       end
       if args.size < 2
         raise ArgumentError.new("Must supply at least name and db parameters")
@@ -57,7 +57,7 @@ module Mongo
       @name = validate_name(name)
       @db, @j_db  = db, db.j_db
       @connection = @db.connection
-      @pk_factory = opts[:pk] || BSON::ObjectId
+      @pk_factory = @opts[:pk] || BSON::ObjectId
       @hint = nil
       @j_collection = j_collection || @j_db.get_collection(@name)
     end
@@ -74,6 +74,9 @@ module Mongo
     # @return [Collection]
     #   the specified sub-collection
     def [](name)
+      new_name = "#{self.name}.#{name}"
+      validate_name new_name
+      @db.create_collection(new_name, @opts)
     end
 
     def capped?

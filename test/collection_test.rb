@@ -50,9 +50,7 @@ class TestCollection < Test::Unit::TestCase
     @coll2 = Collection.new('foo', @@db, :pk => TestPK)
     assert_equal TestPK, @coll2.pk_factory
   end
-end
 
-__END__
   def test_valid_names
     assert_raise Mongo::InvalidNSName do
       @@db["te$t"]
@@ -79,7 +77,9 @@ __END__
     @@db["test"]["foo"].insert("x" => 5)
     assert_equal 5, @@db.collection("test.foo").find_one()["x"]
   end
+end
 
+__END__
   def test_rename_collection
     @@db.drop_collection('foo1')
     @@db.drop_collection('bar1')
