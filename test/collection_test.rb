@@ -1,16 +1,23 @@
 require './test/test_helper'
 
-class TestCollection < Test::Unit::TestCase
+class TestCollection < MiniTest::Unit::TestCase
   @@connection ||= standard_connection(:op_timeout => 10)
   @@db   = @@connection.db(MONGO_TEST_DB)
   @@db.collection_names.each do |n|
     @@db.drop_collection(n) unless n =~ /system/
   end
-  @@test = @@db.collection("test")
+
   @@version = @@connection.server_version
 
+  def clear_collections
+    @@db.collection_names.each do |n|
+      @@db.drop_collection(n) unless n =~ /system/
+    end
+    @@test = @@db.collection("test")
+  end
+
   def setup
-    @@test.remove
+    clear_collections
   end
 
   def test_capped_method
@@ -52,11 +59,11 @@ class TestCollection < Test::Unit::TestCase
   end
 
   def test_valid_names
-    assert_raise Mongo::InvalidNSName do
+    assert_raises Mongo::InvalidNSName do
       @@db["te$t"]
     end
 
-    assert_raise Mongo::InvalidNSName do
+    assert_raises Mongo::InvalidNSName do
       @@db['$main']
     end
 
@@ -77,9 +84,7 @@ class TestCollection < Test::Unit::TestCase
     @@db["test"]["foo"].insert("x" => 5)
     assert_equal 5, @@db.collection("test.foo").find_one()["x"]
   end
-end
 
-__END__
   def test_rename_collection
     @@db.drop_collection('foo1')
     @@db.drop_collection('bar1')
@@ -90,27 +95,27 @@ __END__
     @col.rename('bar1')
     assert_equal 'bar1', @col.name
   end
+# java driver does not allow nil ids
+  # def test_nil_id
+  #   assert_equal 5, @@test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
+  #   assert_equal 5, @@test.save({"_id" => 5, "foo" => "baz"}, {:safe => true})
+  #   assert_equal nil, @@test.find_one("foo" => "bar")
+  #   assert_equal "baz", @@test.find_one(:_id => 5)["foo"]
+  #   assert_raises OperationFailure do
+  #     @@test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
+  #   end
 
-  def test_nil_id
-    assert_equal 5, @@test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
-    assert_equal 5, @@test.save({"_id" => 5, "foo" => "baz"}, {:safe => true})
-    assert_equal nil, @@test.find_one("foo" => "bar")
-    assert_equal "baz", @@test.find_one(:_id => 5)["foo"]
-    assert_raise OperationFailure do
-      @@test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
-    end
-
-    assert_equal nil, @@test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
-    assert_equal nil, @@test.save({"_id" => nil, "foo" => "baz"}, {:safe => true})
-    assert_equal nil, @@test.find_one("foo" => "bar")
-    assert_equal "baz", @@test.find_one(:_id => nil)["foo"]
-    assert_raise OperationFailure do
-      @@test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
-    end
-    assert_raise OperationFailure do
-      @@test.insert({:_id => nil, "foo" => "bar"}, {:safe => true})
-    end
-  end
+  #   assert_equal nil, @@test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
+  #   assert_equal nil, @@test.save({"_id" => nil, "foo" => "baz"}, {:safe => true})
+  #   assert_equal nil, @@test.find_one("foo" => "bar")
+  #   assert_equal "baz", @@test.find_one(:_id => nil)["foo"]
+  #   assert_raises OperationFailure do
+  #     @@test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
+  #   end
+  #   assert_raises OperationFailure do
+  #     @@test.insert({:_id => nil, "foo" => "bar"}, {:safe => true})
+  #   end
+  # end
 
   if @@version > "1.1"
     def setup_for_distinct
@@ -149,7 +154,7 @@ __END__
     @@test.insert(a)
     assert(@@db.get_last_error['err'].include?("11000"))
 
-    assert_raise OperationFailure do
+    assert_raises OperationFailure do
       @@test.insert(a, :safe => true)
     end
   end
@@ -162,7 +167,7 @@ __END__
       docs << {:foo => 1}
       docs << {:foo => 2}
       docs << {:foo => 3}
-      assert_raise OperationFailure do
+      assert_raises OperationFailure do
         @@test.insert(docs, :safe => true)
       end
       assert_equal 1, @@test.count
@@ -174,7 +179,7 @@ __END__
       docs << {:foo => 2}
       docs << {:foo => 3}
       docs << {:foo => 3}
-      assert_raise OperationFailure do
+      assert_raises OperationFailure do
         @@test.insert(docs, :safe => true, :continue_on_error => true)
       end
       assert_equal 3, @@test.count
@@ -184,31 +189,17 @@ __END__
     end
   end
 
+  # java driver does not enforce a maximum
   # def test_maximum_insert_size
   #   docs = []
   #   16.times do
   #     docs << {'foo' => 'a' * 1_000_000}
   #   end
 
-  #   assert_raise InvalidOperation do
+  #   assert_raises InvalidOperation do
   #     @@test.insert(docs)
   #   end
   # end
-
-  if @@version >= "1.5.1"
-    def test_safe_mode_with_advanced_safe_with_invalid_options
-      assert_raise_error ArgumentError, "Unknown key(s): wtime" do
-        @@test.insert({:foo => 1}, :safe => {:w => 2, :wtime => 1, :fsync => true})
-      end
-      assert_raise_error ArgumentError, "Unknown key(s): wtime" do
-        @@test.update({:foo => 1}, {:foo => 2}, :safe => {:w => 2, :wtime => 1, :fsync => true})
-      end
-
-      assert_raise_error ArgumentError, "Unknown key(s): wtime" do
-        @@test.remove({:foo => 2}, :safe => {:w => 2, :wtime => 1, :fsync => true})
-      end
-    end
-  end
 
   def test_update
     id1 = @@test.save("x" => 5)
@@ -222,17 +213,15 @@ __END__
     assert_equal 1, @@test.find_one(:_id => id2)["x"]
   end
 
-  if @@version >= "1.1.3"
-    def test_multi_update
-      @@test.save("num" => 10)
-      @@test.save("num" => 10)
-      @@test.save("num" => 10)
-      assert_equal 3, @@test.count
+  def test_multi_update
+    @@test.save("num" => 10)
+    @@test.save("num" => 10)
+    @@test.save("num" => 10)
+    assert_equal 3, @@test.count
 
-      @@test.update({"num" => 10}, {"$set" => {"num" => 100}}, :multi => true)
-      @@test.find.each do |doc|
-        assert_equal 100, doc["num"]
-      end
+    @@test.update({"num" => 10}, {"$set" => {"num" => 100}}, :multi => true)
+    @@test.find.each do |doc|
+      assert_equal 100, doc["num"]
     end
   end
 
@@ -244,35 +233,18 @@ __END__
     assert_equal 2, @@test.find_one()["count"]
   end
 
-  if @@version < "1.1.3"
-    def test_safe_update
-      @@test.create_index("x")
-      @@test.insert("x" => 5)
+  def test_safe_update
+    @@test.create_index("x", :unique => true)
+    @@test.insert("x" => 5)
+    @@test.insert("x" => 10)
 
-      @@test.update({}, {"$inc" => {"x" => 1}})
-      assert @@db.error?
+    # Can update an indexed collection.
+    @@test.update({}, {"$inc" => {"x" => 1}})
+    assert !@@db.error?
 
-      # Can't change an index.
-      assert_raise OperationFailure do
-        @@test.update({}, {"$inc" => {"x" => 1}}, :safe => true)
-      end
-      @@test.drop
-    end
-  else
-    def test_safe_update
-      @@test.create_index("x", :unique => true)
-      @@test.insert("x" => 5)
-      @@test.insert("x" => 10)
-
-      # Can update an indexed collection.
-      @@test.update({}, {"$inc" => {"x" => 1}})
-      assert !@@db.error?
-
-      # Can't duplicate an index.
-      assert_raise OperationFailure do
-        @@test.update({}, {"x" => 10}, :safe => true)
-      end
-      @@test.drop
+    # Can't duplicate an index.
+    assert_raises OperationFailure do
+      @@test.update({}, {"x" => 10}, :safe => true)
     end
   end
 
@@ -282,24 +254,23 @@ __END__
     @@test.save("hello" => "world")
     @@test.save("hello" => "world")
 
-    assert_raise OperationFailure do
+    assert_raises OperationFailure do
       @@test.save({"hello" => "world"}, :safe => true)
     end
-    @@test.drop
   end
 
-  def test_mocked_safe_remove
-    @conn = standard_connection
-    @db   = @conn[MONGO_TEST_DB]
-    @test = @db['test-safe-remove']
-    @test.save({:a => 20})
-    @conn.stubs(:receive).returns([[{'ok' => 0, 'err' => 'failed'}], 1, 0])
+  # def test_mocked_safe_remove
+  #   @conn = standard_connection
+  #   @db   = @conn[MONGO_TEST_DB]
+  #   @test = @db['test-safe-remove']
+  #   @test.save({:a => 20})
+  #   @conn.stubs(:receive).returns([[{'ok' => 0, 'err' => 'failed'}], 1, 0])
 
-    assert_raise OperationFailure do
-      @test.remove({}, :safe => true)
-    end
-    @test.drop
-  end
+  #   assert_raises OperationFailure do
+  #     @test.remove({}, :safe => true)
+  #   end
+  #   @test.drop
+  # end
 
   def test_safe_remove
     @conn = standard_connection
@@ -315,7 +286,6 @@ __END__
   end
 
   def test_count
-    @@test.drop
 
     assert_equal 0, @@test.count
     @@test.save(:x => 1)
@@ -329,8 +299,6 @@ __END__
 
   # Note: #size is just an alias for #count.
   def test_size
-    @@test.drop
-
     assert_equal 0, @@test.count
     assert_equal @@test.size, @@test.count
     @@test.save("x" => 1)
@@ -339,9 +307,8 @@ __END__
   end
 
   def test_no_timeout_option
-    @@test.drop
 
-    assert_raise ArgumentError, "Timeout can be set to false only when #find is invoked with a block." do
+    assert_raises ArgumentError, "Timeout can be set to false only when #find is invoked with a block." do
       @@test.find({}, :timeout => false)
     end
 
@@ -356,7 +323,7 @@ __END__
     end
   end
 
-  def test_defualt_timeout
+  def test_default_timeout
     cursor = @@test.find
     assert_equal true, cursor.timeout
   end
@@ -375,7 +342,7 @@ __END__
     assert doc['b']
 
 
-    assert_raise Mongo::OperationFailure do
+    assert_raises Mongo::OperationFailure do
       @@test.find_one({:a => 1}, :fields => {:a => 1, :b => 0})
     end
   end
@@ -408,7 +375,7 @@ __END__
     assert_equal nil, @@test.find_one(BSON::OrderedHash["hello", "foo"])
     assert_equal nil, @@test.find_one(ObjectId.new)
 
-    assert_raise TypeError do
+    assert_raises TypeError do
       @@test.find_one(6)
     end
   end
@@ -430,7 +397,9 @@ __END__
     @@test.save(doc)
     assert(doc.include?(:_id))
   end
+# end
 
+# __END__
   def test_optional_find_block
     10.times do |i|
       @@test.save("i" => i)
@@ -534,7 +503,7 @@ __END__
         res = @@test.map_reduce(m, r, :out => {:reduce => output_collection})
         assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 2}
 
-        assert_raise ArgumentError do
+        assert_raises ArgumentError do
           @@test.map_reduce(m, r, :out => {:inline => 1})
         end
 
@@ -560,7 +529,7 @@ __END__
       @@test << { :a => 2, :processed => false }
       @@test << { :a => 3, :processed => false }
 
-      assert_raise Mongo::OperationFailure do
+      assert_raises Mongo::OperationFailure do
         @@test.find_and_modify(:blimey => {})
       end
     end
@@ -585,10 +554,11 @@ __END__
   end
 
   def test_save_symbol_find_string
-    @@test.save(:foo => :mike)
+    @@test.save(:foo => :mike, :foo1 => 'mike')
 
     assert_equal :mike, @@test.find_one(:foo => :mike)["foo"]
     assert_equal :mike, @@test.find_one("foo" => :mike)["foo"]
+    assert_equal 'mike', @@test.find_one("foo" => :mike)["foo1"]
 
     # TODO enable these tests conditionally based on server version (if >1.0)
     # assert_equal :mike, @@test.find_one(:foo => "mike")["foo"]
@@ -702,11 +672,11 @@ __END__
   #   end
 
   #   should "fail if missing required options" do
-  #     assert_raise MongoArgumentError do
+  #     assert_raises MongoArgumentError do
   #       @@test.group(:initial => {})
   #     end
 
-  #     assert_raise MongoArgumentError do
+  #     assert_raises MongoArgumentError do
   #       @@test.group(:reduce => "foo")
   #     end
   #   end
@@ -767,171 +737,171 @@ __END__
   #   end
   # end
 
-  context "A collection with two records" do
-    setup do
-      @collection = @@db.collection('test-collection')
-      @collection.insert({:name => "Jones"})
-      @collection.insert({:name => "Smith"})
-    end
+  # context "A collection with two records" do
+  #   setup do
+  #     @collection = @@db.collection('test-collection')
+  #     @collection.insert({:name => "Jones"})
+  #     @collection.insert({:name => "Smith"})
+  #   end
 
-    should "have two records" do
-      assert_equal 2, @collection.size
-    end
+  #   should "have two records" do
+  #     assert_equal 2, @collection.size
+  #   end
 
-    should "remove the two records" do
-      @collection.remove()
-      assert_equal 0, @collection.size
-    end
+  #   should "remove the two records" do
+  #     @collection.remove()
+  #     assert_equal 0, @collection.size
+  #   end
 
-    should "remove all records if an empty document is specified" do
-      @collection.remove({})
-      assert_equal 0, @collection.find.count
-    end
+  #   should "remove all records if an empty document is specified" do
+  #     @collection.remove({})
+  #     assert_equal 0, @collection.find.count
+  #   end
 
-    should "remove only matching records" do
-      @collection.remove({:name => "Jones"})
-      assert_equal 1, @collection.size
-    end
-  end
+  #   should "remove only matching records" do
+  #     @collection.remove({:name => "Jones"})
+  #     assert_equal 1, @collection.size
+  #   end
+  # end
 
-  context "Drop index " do
-    setup do
-      @@db.drop_collection('test-collection')
-      @collection = @@db.collection('test-collection')
-    end
+  # context "Drop index " do
+  #   setup do
+  #     @@db.drop_collection('test-collection')
+  #     @collection = @@db.collection('test-collection')
+  #   end
 
-    should "drop an index" do
-      @collection.create_index([['a', Mongo::ASCENDING]])
-      assert @collection.index_information['a_1']
-      @collection.drop_index([['a', Mongo::ASCENDING]])
-      assert_nil @collection.index_information['a_1']
-    end
+  #   should "drop an index" do
+  #     @collection.create_index([['a', Mongo::ASCENDING]])
+  #     assert @collection.index_information['a_1']
+  #     @collection.drop_index([['a', Mongo::ASCENDING]])
+  #     assert_nil @collection.index_information['a_1']
+  #   end
 
-    should "drop an index which was given a specific name" do
-      @collection.create_index([['a', Mongo::DESCENDING]], {:name => 'i_will_not_fear'})
-      assert @collection.index_information['i_will_not_fear']
-      @collection.drop_index([['a', Mongo::DESCENDING]])
-      assert_nil @collection.index_information['i_will_not_fear']
-    end
+  #   should "drop an index which was given a specific name" do
+  #     @collection.create_index([['a', Mongo::DESCENDING]], {:name => 'i_will_not_fear'})
+  #     assert @collection.index_information['i_will_not_fear']
+  #     @collection.drop_index([['a', Mongo::DESCENDING]])
+  #     assert_nil @collection.index_information['i_will_not_fear']
+  #   end
 
-    should "drops an composite index" do
-      @collection.create_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
-      assert @collection.index_information['a_-1_b_1']
-      @collection.drop_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
-      assert_nil @collection.index_information['a_-1_b_1']
-    end
+  #   should "drops an composite index" do
+  #     @collection.create_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
+  #     assert @collection.index_information['a_-1_b_1']
+  #     @collection.drop_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
+  #     assert_nil @collection.index_information['a_-1_b_1']
+  #   end
 
-    should "drops an index with symbols" do
-      @collection.create_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
-      assert @collection.index_information['a_-1_b_1']
-      @collection.drop_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
-      assert_nil @collection.index_information['a_-1_b_1']
-    end
-  end
+  #   should "drops an index with symbols" do
+  #     @collection.create_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
+  #     assert @collection.index_information['a_-1_b_1']
+  #     @collection.drop_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
+  #     assert_nil @collection.index_information['a_-1_b_1']
+  #   end
+  # end
 
-  context "Creating indexes " do
-    setup do
-      @@db.drop_collection('geo')
-      @@db.drop_collection('test-collection')
-      @collection = @@db.collection('test-collection')
-      @geo        = @@db.collection('geo')
-    end
+  # context "Creating indexes " do
+  #   setup do
+  #     @@db.drop_collection('geo')
+  #     @@db.drop_collection('test-collection')
+  #     @collection = @@db.collection('test-collection')
+  #     @geo        = @@db.collection('geo')
+  #   end
 
-    should "create index using symbols" do
-      @collection.create_index :foo, :name => :bar
-      @geo.create_index :goo, :name => :baz
-      assert @collection.index_information['bar']
-      @collection.drop_index :bar
-      assert_nil @collection.index_information['bar']
-      assert @geo.index_information['baz']
-      @geo.drop_index(:baz)
-      assert_nil @geo.index_information['baz']
-    end
+  #   should "create index using symbols" do
+  #     @collection.create_index :foo, :name => :bar
+  #     @geo.create_index :goo, :name => :baz
+  #     assert @collection.index_information['bar']
+  #     @collection.drop_index :bar
+  #     assert_nil @collection.index_information['bar']
+  #     assert @geo.index_information['baz']
+  #     @geo.drop_index(:baz)
+  #     assert_nil @geo.index_information['baz']
+  #   end
 
-    should "create a geospatial index" do
-      @geo.save({'loc' => [-100, 100]})
-      @geo.create_index([['loc', Mongo::GEO2D]])
-      assert @geo.index_information['loc_2d']
-    end
+  #   should "create a geospatial index" do
+  #     @geo.save({'loc' => [-100, 100]})
+  #     @geo.create_index([['loc', Mongo::GEO2D]])
+  #     assert @geo.index_information['loc_2d']
+  #   end
 
-    should "create a unique index" do
-      @collection.create_index([['a', Mongo::ASCENDING]], :unique => true)
-      assert @collection.index_information['a_1']['unique'] == true
-    end
+  #   should "create a unique index" do
+  #     @collection.create_index([['a', Mongo::ASCENDING]], :unique => true)
+  #     assert @collection.index_information['a_1']['unique'] == true
+  #   end
 
-    should "drop duplicates" do
-      @collection.insert({:a => 1})
-      @collection.insert({:a => 1})
-      assert_equal 2, @collection.find({:a => 1}).count
-      @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :dropDups => true)
-      assert_equal 1, @collection.find({:a => 1}).count
-    end
+  #   should "drop duplicates" do
+  #     @collection.insert({:a => 1})
+  #     @collection.insert({:a => 1})
+  #     assert_equal 2, @collection.find({:a => 1}).count
+  #     @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :dropDups => true)
+  #     assert_equal 1, @collection.find({:a => 1}).count
+  #   end
 
-    should "drop duplicates with ruby-like drop_dups key" do
-      @collection.insert({:a => 1})
-      @collection.insert({:a => 1})
-      assert_equal 2, @collection.find({:a => 1}).count
-      @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
-      assert_equal 1, @collection.find({:a => 1}).count
-    end
+  #   should "drop duplicates with ruby-like drop_dups key" do
+  #     @collection.insert({:a => 1})
+  #     @collection.insert({:a => 1})
+  #     assert_equal 2, @collection.find({:a => 1}).count
+  #     @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
+  #     assert_equal 1, @collection.find({:a => 1}).count
+  #   end
 
-    should "drop duplicates with ensure_index and drop_dups key" do
-      @collection.insert({:a => 1})
-      @collection.insert({:a => 1})
-      assert_equal 2, @collection.find({:a => 1}).count
-      @collection.ensure_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
-      assert_equal 1, @collection.find({:a => 1}).count
-    end
+  #   should "drop duplicates with ensure_index and drop_dups key" do
+  #     @collection.insert({:a => 1})
+  #     @collection.insert({:a => 1})
+  #     assert_equal 2, @collection.find({:a => 1}).count
+  #     @collection.ensure_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
+  #     assert_equal 1, @collection.find({:a => 1}).count
+  #   end
 
-    should "create an index in the background" do
-      if @@version > '1.3.1'
-        @collection.create_index([['b', Mongo::ASCENDING]], :background => true)
-        assert @collection.index_information['b_1']['background'] == true
-      else
-        assert true
-      end
-    end
+  #   should "create an index in the background" do
+  #     if @@version > '1.3.1'
+  #       @collection.create_index([['b', Mongo::ASCENDING]], :background => true)
+  #       assert @collection.index_information['b_1']['background'] == true
+  #     else
+  #       assert true
+  #     end
+  #   end
 
-    should "require an array of arrays" do
-      assert_raise MongoArgumentError do
-        @collection.create_index(['c', Mongo::ASCENDING])
-      end
-    end
+  #   should "require an array of arrays" do
+  #     assert_raises MongoArgumentError do
+  #       @collection.create_index(['c', Mongo::ASCENDING])
+  #     end
+  #   end
 
-    should "enforce proper index types" do
-      assert_raise MongoArgumentError do
-        @collection.create_index([['c', 'blah']])
-      end
-    end
+  #   should "enforce proper index types" do
+  #     assert_raises MongoArgumentError do
+  #       @collection.create_index([['c', 'blah']])
+  #     end
+  #   end
 
-    should "raise an error if index name is greater than 128" do
-      assert_raise Mongo::OperationFailure do
-        @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
-          ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]])
-      end
-    end
+  #   should "raise an error if index name is greater than 128" do
+  #     assert_raises Mongo::OperationFailure do
+  #       @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
+  #         ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]])
+  #     end
+  #   end
 
-    should "allow for an alternate name to be specified" do
-      @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
-        ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]], :name => 'foo_index')
-      assert @collection.index_information['foo_index']
-    end
+  #   should "allow for an alternate name to be specified" do
+  #     @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
+  #       ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]], :name => 'foo_index')
+  #     assert @collection.index_information['foo_index']
+  #   end
 
-    should "allow creation of multiple indexes" do
-      assert @collection.create_index([['a', 1]])
-      assert @collection.create_index([['a', 1]])
-    end
+  #   should "allow creation of multiple indexes" do
+  #     assert @collection.create_index([['a', 1]])
+  #     assert @collection.create_index([['a', 1]])
+  #   end
 
-    context "with an index created" do
-      setup do
-        @collection.create_index([['b', 1], ['a', 1]])
-      end
+  #   context "with an index created" do
+  #     setup do
+  #       @collection.create_index([['b', 1], ['a', 1]])
+  #     end
 
-      should "return properly ordered index information" do
-        assert @collection.index_information['b_1_a_1']
-      end
-    end
-  end
+  #     should "return properly ordered index information" do
+  #       assert @collection.index_information['b_1_a_1']
+  #     end
+  #   end
+  # end
 
   # context "Capped collections" do
   #   setup do
@@ -955,7 +925,7 @@ __END__
   #     col = @@db['regular-collection']
   #     col.insert({:a => 1000})
   #     tail = Cursor.new(col, :tailable => true, :order => [['$natural', 1]])
-  #     assert_raise OperationFailure do
+  #     assert_raises OperationFailure do
   #       tail.next_document
   #     end
   #   end

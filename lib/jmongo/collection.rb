@@ -147,6 +147,7 @@ module Mongo
       snapshot = opts.delete(:snapshot)
       batch_size = opts.delete(:batch_size)
       timeout    = (opts.delete(:timeout) == false) ? false : true
+      transformer = options.delete(:transformer)
       if timeout == false && !block_given?
         raise ArgumentError, "Timeout can be set to false only when #find is invoked with a block."
       end
@@ -160,7 +161,9 @@ module Mongo
       raise RuntimeError, "Unknown options [#{opts.inspect}]" unless opts.empty?
 
       cursor = Cursor.new(self, :selector => selector, :fields => fields, :skip => skip, :limit => limit,
-                          :order => sort, :hint => hint, :snapshot => snapshot, :timeout => timeout, :batch_size => batch_size)
+                                :order => sort, :hint => hint, :snapshot => snapshot,
+                                :batch_size => batch_size, :timeout => timeout)#,
+                                #:transformer => transformer)
       if block_given?
         yield cursor
         cursor.close
@@ -196,7 +199,12 @@ module Mongo
              else
                raise TypeError, "spec_or_object_id must be an instance of ObjectId or Hash, or nil"
              end
-      find_one_document(spec, opts)
+      fields = opts.fetch(:fields, opts.fetch('fields', {}))
+      begin
+        find_one_document(spec, fields)
+      rescue => ex
+        raise OperationFailure, ex.message
+      end
     end
 
     # Save a document to this collection.
@@ -236,7 +244,8 @@ module Mongo
       doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
       safe = (options[:safe] || false)
       continue = (options[:continue_on_error] || false)
-      insert_documents(doc_or_docs, safe, continue)
+      docs = insert_documents(doc_or_docs, safe, continue)
+      docs.size == 1 ? docs.first['_id'] : docs.collect{|doc| doc['_id']}
     end
     alias_method :<<, :insert
 
@@ -289,7 +298,7 @@ module Mongo
     def update(selector, document, options={})
       upsert, multi = !!(options[:upsert]), !!(options[:multi])
       safe = (options[:safe] || false)
-      update_documents(selector, document,upsert,multi,safe)
+      update_documents(selector, document, upsert, multi, safe)
     end
 
     # Create a new index.
@@ -578,9 +587,13 @@ module Mongo
     # @raise [Mongo::InvalidNSName] if +new_name+ is an invalid collection name.
     def rename(new_name)
       name = validate_name(new_name)
-
-      @db.rename_collection(@name, name)
-      @name = name
+      begin
+        jcol = @j_collection.rename(name)
+        @name = name
+        @j_collection = jcol
+      rescue => ex
+        raise MongoDBError, "Error renaming collection: #{name}, more: #{ex.message}"
+      end
     end
 
     # Get information on the indexes for this collection.
@@ -597,7 +610,6 @@ module Mongo
     #
     # @return [Hash] options that apply to this collection.
     def options
-      puts '','collection (created) info'
       info = @db.collections_info(@name).to_a
       ap info
       info.last['options']

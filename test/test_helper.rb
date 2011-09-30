@@ -1,8 +1,9 @@
 $:.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'rubygems' if RUBY_VERSION < '1.9.0' && ENV['C_EXT']
 require 'jmongo'
-require 'test/unit'
+#require 'test/unit'
 require 'awesome_print'
+require 'minitest/autorun'
 
 def silently
   warn_level = $VERBOSE
@@ -12,10 +13,10 @@ def silently
   result
 end
 
-def apr(obj, prefix = '')
+def apr(obj, prefix = '=====')
   puts prefix
   ap obj
-  puts ''
+  puts '====='
 end
 
 begin
@@ -49,7 +50,7 @@ unless defined? TEST_HOST
   TEST_HOST = ENV['MONGO_RUBY_DRIVER_HOST'] || 'localhost'
 end
 
-class Test::Unit::TestCase
+class MiniTest::Unit::TestCase
   include Mongo
   include BSON
 

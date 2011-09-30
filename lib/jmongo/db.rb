@@ -134,11 +134,12 @@ module Mongo
     end
 
     def rename_collection(from, to)
-      oh = BSON::OrderedHash.new
-      oh['renameCollection'] = "#{@name}.#{from}"
-      oh['to'] = "#{@name}.#{to}"
-      doc = DB.new('admin', @connection).command(oh, :check_response => false)
-      ok?(doc) || raise(MongoDBError, "Error renaming collection: #{doc.inspect}")
+      begin
+        @j_db.get_collection(from).rename(to)
+      rescue => ex
+        raise(MongoDBError, "Error renaming collection from: #{from}, to: #{to}")
+      end
+      true
     end
 
     def drop_index(collection_name, index_name)
@@ -154,11 +155,18 @@ module Mongo
     end
 
     def stats
-      exec_command(:dbstats)
+      from_dbobject exec_command(:dbstats)
     end
 
     def create_index(collection_name, field_or_spec, unique=false)
       collection(collection_name).create_indexes(field_or_spec,{:unique=>unique})
+    end
+    # Return +true+ if an error was caused by the most recently executed
+    # database operation.
+    #
+    # @return [Boolean]
+    def error?
+      get_last_error['err'] != nil
     end
 
     def ok?(doc)
@@ -167,7 +175,7 @@ module Mongo
 
     def command(selector, opts={})
       check_response = opts.fetch(:check_response, true)
-      raise MongoArgumentError, "command must be given a selector" unless selector.is_a?(Hash) && !selector.empty?
+      raise MongoArgumentError, "command must be given a selector" unless selector.respond_to?('merge') && !selector.empty?
       if selector.keys.length > 1 && RUBY_VERSION < '1.9' && selector.class != BSON::OrderedHash
         raise MongoArgumentError, "DB#command requires an OrderedHash when hash contains multiple keys"
       end

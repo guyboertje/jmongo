@@ -20,6 +20,10 @@ module JMongo
 end
 
 class Java::ComMongodb::BasicDBObject
+  def self.[](*args)
+    Hash[*args]
+  end
+
   if RUBY_PLATFORM == 'java' && JRUBY_VERSION =~ /(1\.[6-9]|[2-9]\.[0-9])..*/
     def hashify
       self.to_map.to_hash

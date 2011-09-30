@@ -20,7 +20,8 @@ module Mongo
           @connection.drop_database(name)
         end
         def _server_version
-          @connection.get_version
+          #@connection.get_version
+          "1.8"
         end
       end
       module ClassMethods
@@ -68,6 +69,11 @@ module Mongo
       def has_coll(name)
         @j_db.collection_exists(name)
       end
+
+      def get_last_error
+        from_dbobject @j_db.get_last_error
+      end
+
     end
 
     module Collection_
@@ -146,19 +152,20 @@ module Mongo
       end
 
       def remove_documents(obj, safe=nil)
-        wr = @j_collection.remove(to_dbobject(obj), write_concern(safe))
-        wr.get_error.nil? && wr.get_n > 0
+        concern = write_concern(safe)
+        wr = @j_collection.remove(to_dbobject(obj), concern)
+        return from_dbobject(wr.last_error(concern)) if concern.call_get_last_error
+        true
       end
 
       ## Note: refactor when java driver fully supports continue_on_error
       def insert_documents(obj, safe=nil, continue_on_error=false)
-        out = []
         to_do = [obj].flatten
         concern = write_concern(safe)
         if continue_on_error
+          out = []
           to_do.each do |doc|
             res = _insert_one(doc, concern)
-            break if !continue_on_error && res.nil?
             out << res if res
           end
           if to_do.size != out.size
@@ -167,9 +174,7 @@ module Mongo
           end
         else
           begin
-            dbo = to_dbobject(to_do)
-            out = dbo
-            @j_collection.insert( dbo, concern )
+            @j_collection.insert( to_dbobject(to_do), concern )
           rescue => ex
             if ex.message =~ /E11000/
               msg = "Failed to insert document #{obj.inspect}, duplicate key"
@@ -180,7 +185,7 @@ module Mongo
             end
           end
         end
-        out
+        to_do
       end
 
       def _insert_one(obj, concern)
@@ -205,21 +210,53 @@ module Mongo
         from_dbobject @j_collection.find_and_modify(to_dbobject(query),to_dbobject(fields),to_dbobject(sort),remove,to_dbobject(update),new_,upsert)
       end
 
-      def find_one_document(document, fields)
-        from_dbobject @j_collection.findOne(to_dbobject(document),to_dbobject(fields))
+      def find_one_document(spec, fields)
+        flds = if fields.kind_of?(Array)
+          fields << "_id" if fields.empty?
+          Hash[fields.zip( [1]*fields.size )]
+        else
+          fields
+        end
+        from_dbobject @j_collection.find_one(to_dbobject(spec), to_dbobject(flds))
       end
 
       def update_documents(selector, document, upsert=false, multi=false, safe=nil)
-        @j_collection.update(to_dbobject(selector),to_dbobject(document), upsert, multi, write_concern(safe))
+        begin
+          @j_collection.update(to_dbobject(selector),to_dbobject(document), upsert, multi, write_concern(safe))
+        rescue => ex
+          if ex.message =~ /E11001/
+            msg = "Failed to update document #{document.inspect}, duplicate key"
+            raise(Mongo::OperationFailure, msg)
+          else
+            msg = "Failed to update document #{document.inspect} db error: #{ex.message}"
+            raise Mongo::MongoDBError, msg
+          end
+        end
       end
 
       def save_document(obj, safe=nil)
-        id = obj.delete(:_id) || obj.delete('_id')
-        obj['_id'] = id || BSON::ObjectId.new
+        @pk_factory.create_pk(obj)
         db_obj = to_dbobject(obj)
-        @j_collection.save(db_obj, write_concern(safe))
-        obj['_id']
+        concern = write_concern(safe)
+        begin
+          @j_collection.save( db_obj, concern )
+        rescue => ex
+          if ex.message =~ /E11000/
+            msg = "Failed to insert document #{obj.inspect}, duplicate key"
+            raise(Mongo::OperationFailure, msg)
+          else
+            msg = "Failed to insert document #{obj.inspect} db error: #{ex.message}"
+            raise Mongo::MongoDBError, msg
+          end
+        end
+        db_obj['_id']
       end
+
+      # def id_nil?(obj)
+      #   return true if obj.has_key?(:_id) && obj[:_id].nil?
+      #   return true if obj.has_key?('_id') && obj['_id'].nil?
+      #   false
+      # end
     end
     module NoImplYetClass
       def raise_not_implemented
