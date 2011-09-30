@@ -171,6 +171,13 @@ module Mongo
       self
     end
 
+    def _sort(key_or_list=nil, direction=nil)
+      return if key_or_list.nil?
+      check_modifiable
+      @order = prep_sort(key_or_list, direction)
+    end
+    private :_sort
+
     def sort(key_or_list, direction=nil)
       _sort(key_or_list, direction)
       wrap_invalid_op do
@@ -178,22 +185,6 @@ module Mongo
       end
       self
     end
-
-    def _sort(key_or_list=nil, direction=nil)
-      return if key_or_list.nil?
-      check_modifiable
-      if !direction.nil?
-        order = [[key_or_list, direction]]
-      elsif key_or_list.is_a?(String) || key_or_list.is_a?(Symbol)
-        order = [[key_or_list.to_s, 1]]
-      else
-        order = [key_or_list]
-      end
-      hord = {}
-      order.flatten.each_slice(2){|k,v| hord[k] = sort_value(k,v)}
-      @order = to_dbobject(hord)
-    end
-    private :_sort
 
     def size
       @j_cursor.size

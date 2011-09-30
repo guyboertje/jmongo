@@ -147,7 +147,7 @@ module Mongo
       snapshot = opts.delete(:snapshot)
       batch_size = opts.delete(:batch_size)
       timeout    = (opts.delete(:timeout) == false) ? false : true
-      transformer = options.delete(:transformer)
+      transformer = opts.delete(:transformer)
       if timeout == false && !block_given?
         raise ArgumentError, "Timeout can be set to false only when #find is invoked with a block."
       end
@@ -419,20 +419,42 @@ module Mongo
     #
     # @core mapreduce map_reduce-instance_method
     def map_reduce(map, reduce, opts={})
-      map    = BSON::Code.new(map) unless map.is_a?(BSON::Code)
-      reduce = BSON::Code.new(reduce) unless reduce.is_a?(BSON::Code)
+      query = opts.fetch(:query,{})
+      sort = opts.fetch(:sort,[])
+      limit = opts.fetch(:limit,0)
+      finalize = opts[:finalize]
+      out = opts[:out]
+      keeptemp = opts.fetch(:keeptemp,true)
+      verbose = opts.fetch(:verbose,true)
+      raw     = opts.delete(:raw)
 
-      hash = BSON::OrderedHash.new
-      hash['mapreduce'] = self.name
-      hash['map'] = map
-      hash['reduce'] = reduce
-      hash.merge! opts
+      m = map.to_s
+      r = reduce.to_s
+      ap m
+      ap r
 
-      result = @db.command(hash)
-      unless result["ok"] == 1
-        raise Mongo::OperationFailure, "map-reduce failed: #{result['errmsg']}"
+      mrc = case out
+          when nil
+            JMongo::MapReduceCommand.new(@j_collection, m, r, nil, REPLACE,to_dbobject(query))
+          when String
+            JMongo::MapReduceCommand.new(@j_collection, m, r, out, REPLACE,to_dbobject(query))
+          else
+            raise_not_implemented
+          end
+      mrc.verbose = verbose
+      mrc.sort = prep_sort(sort)
+      mrc.limit = limit
+      mrc.finalize = finalize
+      result =  from_dbobject(@j_db.command(mrc.toDBObject))
+      ap result
+      if raw
+        result
+      elsif result["result"]
+        @db[result["result"]]
+      else
+        raise ArgumentError, "Could not instantiate collection from result. If you specified " +
+          "{:out => {:inline => true}}, then you must also specify :raw => true to get the results."
       end
-      @db[result["result"]]
     end
     alias :mapreduce :map_reduce
 

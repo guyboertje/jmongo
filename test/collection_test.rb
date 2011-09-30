@@ -259,19 +259,6 @@ class TestCollection < MiniTest::Unit::TestCase
     end
   end
 
-  # def test_mocked_safe_remove
-  #   @conn = standard_connection
-  #   @db   = @conn[MONGO_TEST_DB]
-  #   @test = @db['test-safe-remove']
-  #   @test.save({:a => 20})
-  #   @conn.stubs(:receive).returns([[{'ok' => 0, 'err' => 'failed'}], 1, 0])
-
-  #   assert_raises OperationFailure do
-  #     @test.remove({}, :safe => true)
-  #   end
-  #   @test.drop
-  # end
-
   def test_safe_remove
     @conn = standard_connection
     @db   = @conn[MONGO_TEST_DB]
@@ -397,9 +384,7 @@ class TestCollection < MiniTest::Unit::TestCase
     @@test.save(doc)
     assert(doc.include?(:_id))
   end
-# end
 
-# __END__
   def test_optional_find_block
     10.times do |i|
       @@test.save("i" => i)
@@ -426,92 +411,99 @@ class TestCollection < MiniTest::Unit::TestCase
     assert c.closed?
   end
 
-  if @@version > "1.1.1"
-    def test_map_reduce
-      @@test << { "user_id" => 1 }
-      @@test << { "user_id" => 2 }
+  def test_map_reduce
+    ap "test_map_reduce"
+    @@test << { "user_id" => 1 }
+    @@test << { "user_id" => 2 }
 
-      m = "function() { emit(this.user_id, 1); }"
-      r = "function(k,vals) { return 1; }"
-      res = @@test.map_reduce(m, r, :out => 'foo');
-      assert res.find_one({"_id" => 1})
-      assert res.find_one({"_id" => 2})
-    end
-
-    def test_map_reduce_with_code_objects
-      @@test << { "user_id" => 1 }
-      @@test << { "user_id" => 2 }
-
-      m = Code.new("function() { emit(this.user_id, 1); }")
-      r = Code.new("function(k,vals) { return 1; }")
-      res = @@test.map_reduce(m, r, :out => 'foo');
-      assert res.find_one({"_id" => 1})
-      assert res.find_one({"_id" => 2})
-    end
-
-    def test_map_reduce_with_options
-      @@test.remove
-      @@test << { "user_id" => 1 }
-      @@test << { "user_id" => 2 }
-      @@test << { "user_id" => 3 }
-
-      m = Code.new("function() { emit(this.user_id, 1); }")
-      r = Code.new("function(k,vals) { return 1; }")
-      res = @@test.map_reduce(m, r, :query => {"user_id" => {"$gt" => 1}}, :out => 'foo');
-      assert_equal 2, res.count
-      assert res.find_one({"_id" => 2})
-      assert res.find_one({"_id" => 3})
-    end
-
-    def test_map_reduce_with_raw_response
-      m = Code.new("function() { emit(this.user_id, 1); }")
-      r = Code.new("function(k,vals) { return 1; }")
-      res = @@test.map_reduce(m, r, :raw => true, :out => 'foo')
-      assert res["result"]
-      assert res["counts"]
-      assert res["timeMillis"]
-    end
-
-    def test_map_reduce_with_output_collection
-      output_collection = "test-map-coll"
-      m = Code.new("function() { emit(this.user_id, 1); }")
-      r = Code.new("function(k,vals) { return 1; }")
-      res = @@test.map_reduce(m, r, :raw => true, :out => output_collection)
-      assert_equal output_collection, res["result"]
-      assert res["counts"]
-      assert res["timeMillis"]
-    end
-
-
-    if @@version >= "1.8.0"
-      def test_map_reduce_with_collection_merge
-        @@test << {:user_id => 1}
-        @@test << {:user_id => 2}
-        output_collection = "test-map-coll"
-        m = Code.new("function() { emit(this.user_id, {count: 1}); }")
-        r = Code.new("function(k,vals) { var sum = 0;" +
-          " vals.forEach(function(v) { sum += v.count;} ); return {count: sum}; }")
-        res = @@test.map_reduce(m, r, :out => output_collection)
-
-        @@test.remove
-        @@test << {:user_id => 3}
-        res = @@test.map_reduce(m, r, :out => {:merge => output_collection})
-        assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 1}
-
-        @@test.remove
-        @@test << {:user_id => 3}
-        res = @@test.map_reduce(m, r, :out => {:reduce => output_collection})
-        assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 2}
-
-        assert_raises ArgumentError do
-          @@test.map_reduce(m, r, :out => {:inline => 1})
-        end
-
-        @@test.map_reduce(m, r, :raw => true, :out => {:inline => 1})
-        assert res["results"]
-      end
-    end
+    m = "function() { emit(this.user_id, 1); }"
+    r = "function(k,vals) { return 1; }"
+    res = @@test.map_reduce(m, r, :out => 'foo');
+    assert res.find_one({"_id" => 1})
+    assert res.find_one({"_id" => 2})
   end
+
+  def test_map_reduce_with_code_objects
+    @@test << { "user_id" => 1 }
+    @@test << { "user_id" => 2 }
+ap "test_map_reduce_with_code_objects"
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = @@test.map_reduce(m, r, :out => 'foo');
+    assert res.find_one({"_id" => 1})
+    assert res.find_one({"_id" => 2})
+  end
+
+  def test_map_reduce_with_options
+    @@test << { "user_id" => 1 }
+    @@test << { "user_id" => 2 }
+    @@test << { "user_id" => 3 }
+ap "test_map_reduce_with_options"
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = @@test.map_reduce(m, r, :query => {"user_id" => {"$gt" => 1}}, :out => 'foo');
+    assert_equal 2, res.count
+    assert res.find_one({"_id" => 2})
+    assert res.find_one({"_id" => 3})
+  end
+
+  def test_map_reduce_with_raw_response
+    @@test << { "user_id" => 1 }
+    @@test << { "user_id" => 2 }
+    @@test << { "user_id" => 3 }
+    ap "test_map_reduce_with_raw_response"
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = @@test.map_reduce(m, r, :raw => true, :out => 'foo')
+    assert res["result"]
+    assert res["counts"]
+    assert res["timeMillis"]
+  end
+
+  def test_map_reduce_with_output_collection
+    @@test << { "user_id" => 1 }
+    @@test << { "user_id" => 2 }
+    @@test << { "user_id" => 3 }
+    ap "test_map_reduce_with_output_collection"
+    output_collection = "test-map-coll"
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = @@test.map_reduce(m, r, :raw => true, :out => output_collection)
+    assert_equal output_collection, res["result"]
+    assert res["counts"]
+    assert res["timeMillis"]
+  end
+end
+
+__END__
+  # if @@version >= "1.8.0"
+  #   def test_map_reduce_with_collection_merge
+  #     @@test << {:user_id => 1}
+  #     @@test << {:user_id => 2}
+  #     output_collection = "test-map-coll"
+  #     m = Code.new("function() { emit(this.user_id, {count: 1}); }")
+  #     r = Code.new("function(k,vals) { var sum = 0;" +
+  #       " vals.forEach(function(v) { sum += v.count;} ); return {count: sum}; }")
+  #     res = @@test.map_reduce(m, r, :out => output_collection)
+
+  #     @@test.remove
+  #     @@test << {:user_id => 3}
+  #     res = @@test.map_reduce(m, r, :out => {:merge => output_collection})
+  #     assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 1}
+
+  #     @@test.remove
+  #     @@test << {:user_id => 3}
+  #     res = @@test.map_reduce(m, r, :out => {:reduce => output_collection})
+  #     assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 2}
+
+  #     assert_raises ArgumentError do
+  #       @@test.map_reduce(m, r, :out => {:inline => 1})
+  #     end
+
+  #     @@test.map_reduce(m, r, :raw => true, :out => {:inline => 1})
+  #     assert res["results"]
+  #   end
+  # end
 
   if @@version > "1.3.0"
     def test_find_and_modify

@@ -31,6 +31,10 @@ module Mongo
 
   DEFAULT_MAX_BSON_SIZE = 1024 * 1024 * 4
 
+  REPLACE  = JMongo::MapReduceCommand::OutputType::REPLACE
+  MERGE    = JMongo::MapReduceCommand::OutputType::MERGE
+  REDUCE   = JMongo::MapReduceCommand::OutputType::REDUCE
+  INLINE   = JMongo::MapReduceCommand::OutputType::INLINE
 
   module Constants
     DEFAULT_BATCH_SIZE = 100
@@ -45,7 +49,7 @@ module Mongo
     OP_KILL_CURSORS = 2007
 
     OP_QUERY_TAILABLE          = JMongo::Bytes::QUERYOPTION_TAILABLE
-    OP_QUERY_SLAVE_OK          = JMongo::Bytes::QUERYOPTION_SLAVEOK 
+    OP_QUERY_SLAVE_OK          = JMongo::Bytes::QUERYOPTION_SLAVEOK
     OP_QUERY_OPLOG_REPLAY      = JMongo::Bytes::QUERYOPTION_OPLOGREPLAY
     OP_QUERY_NO_CURSOR_TIMEOUT = JMongo::Bytes::QUERYOPTION_NOTIMEOUT
     OP_QUERY_AWAIT_DATA        = JMongo::Bytes::QUERYOPTION_AWAITDATA

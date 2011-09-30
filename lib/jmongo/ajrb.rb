@@ -268,6 +268,20 @@ module Mongo
         raise NoMethodError, "This method hasn't been implemented yet."
       end
 
+      def prep_sort(key_or_list=nil, direction=nil)
+        return if key_or_list.nil?
+        if !direction.nil?
+          order = [[key_or_list, direction]]
+        elsif key_or_list.is_a?(String) || key_or_list.is_a?(Symbol)
+          order = [[key_or_list.to_s, 1]]
+        else
+          order = [key_or_list]
+        end
+        hord = {}
+        order.flatten.each_slice(2){|k,v| hord[k] = sort_value(k,v)}
+        to_dbobject(hord)
+      end
+
       def to_dbobject obj
         if obj.respond_to?(:merge)
           hash_to_dbobject(obj)

@@ -72,7 +72,7 @@ module Mongo
       selector = {}
       selector[:name] = full_collection_name(coll_name) if coll_name
       coll = self.collection(SYSTEM_NAMESPACE_COLLECTION)
-      coll.find :selector => selector
+      coll.find selector
     end
 
     def create_collection(name, options={})

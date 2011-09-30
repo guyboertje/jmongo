@@ -17,6 +17,8 @@ module JMongo
   import com.mongodb.WriteResult
   import com.mongodb.MongoException
   import com.mongodb.MongoURI
+  import com.mongodb.MapReduceCommand
+  import com.mongodb.MapReduceOutput
 end
 
 class Java::ComMongodb::BasicDBObject
@@ -117,7 +119,7 @@ module BSON
   class Code < String
     # copied verbatim from ruby driver
         # Hash mapping identifiers to their values
-    attr_accessor :scope, :code
+    attr_accessor :scope
 
     # Wrap code to be evaluated by MongoDB.
     #
@@ -144,6 +146,10 @@ module BSON
 
     def inspect
       "<BSON::Code:#{object_id} @data=\"#{@code}\" @scope=\"#{@scope.inspect}\">"
+    end
+
+    def to_s
+      @code
     end
 
     def to_bson_code
