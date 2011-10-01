@@ -268,6 +268,14 @@ module Mongo
         raise NoMethodError, "This method hasn't been implemented yet."
       end
 
+      def trap_raise(ex_class, msg=nil)
+        begin
+          yield
+        rescue => ex
+          raise ex_class, msg ? "#{msg} - #{ex.message}" : ex.message
+        end
+      end
+
       def prep_sort(key_or_list=nil, direction=nil)
         return if key_or_list.nil?
         if !direction.nil?

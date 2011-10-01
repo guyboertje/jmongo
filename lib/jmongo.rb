@@ -36,6 +36,8 @@ module Mongo
   REDUCE   = JMongo::MapReduceCommand::OutputType::REDUCE
   INLINE   = JMongo::MapReduceCommand::OutputType::INLINE
 
+  MapReduceEnumHash = {:replace => REPLACE, :merge => MERGE, :reduce => REDUCE, :inline => INLINE}
+
   module Constants
     DEFAULT_BATCH_SIZE = 100
 

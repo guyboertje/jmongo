@@ -152,7 +152,7 @@ module Mongo
     #
     # @core databases []-instance_method
     def [](db_name)
-      DB.new db_name, self
+      db db_name
     end
 
     # Drop a database.
@@ -186,14 +186,13 @@ module Mongo
     #
     # @return [Hash]
     def ping
-      self["admin"].command({:ping => 1})
+      db("admin").command('ping')
     end
-
     # Get the build information for the current connection.
     #
     # @return [Hash]
     def server_info
-      self["admin"].command({:buildinfo => 1})
+      db("admin").command('buildinfo')
     end
 
     # Get the build version of the current server.
@@ -201,7 +200,7 @@ module Mongo
     # @return [Mongo::ServerVersion]
     #   object allowing easy comparability of version.
     def server_version
-      _server_version
+      ServerVersion.new(server_info["version"])
     end
 
     # Is it okay to connect to a slave?

@@ -173,9 +173,10 @@ module Mongo
       doc['ok'] == 1.0 || doc['ok'] == true
     end
 
-    def command(selector, opts={})
+    def command(cmd, opts={})
+      selector = cmd.respond_to?('merge') ? cmd : {cmd.to_s => 1}
       check_response = opts.fetch(:check_response, true)
-      raise MongoArgumentError, "command must be given a selector" unless selector.respond_to?('merge') && !selector.empty?
+      raise MongoArgumentError, "command must be given a selector" if selector.empty?
       if selector.keys.length > 1 && RUBY_VERSION < '1.9' && selector.class != BSON::OrderedHash
         raise MongoArgumentError, "DB#command requires an OrderedHash when hash contains multiple keys"
       end

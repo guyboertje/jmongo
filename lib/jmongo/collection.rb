@@ -389,12 +389,14 @@ module Mongo
     def find_and_modify(opts={})
       query  = opts[:query] || {}
       fields = opts[:fields] || {}
-      sort   = opts[:sort] || {}
+      sort   = prep_sort(opts[:sort] || [])
       update = opts[:update] || {}
       remove = opts[:remove] || false
       new_    = opts[:new] || false
       upsert = opts[:upsert] || false
-      find_and_modify_document(query, fields, sort, remove, update, new_, upsert)
+      trap_raise(OperationFailure) do
+        find_and_modify_document(query, fields, sort, remove, update, new_, upsert)
+      end
     end
 
     # Perform a map/reduce operation on the current collection.
@@ -430,23 +432,32 @@ module Mongo
 
       m = map.to_s
       r = reduce.to_s
-      ap m
-      ap r
 
       mrc = case out
-          when nil
-            JMongo::MapReduceCommand.new(@j_collection, m, r, nil, REPLACE,to_dbobject(query))
           when String
-            JMongo::MapReduceCommand.new(@j_collection, m, r, out, REPLACE,to_dbobject(query))
+            JMongo::MapReduceCommand.new(@j_collection, m, r, out, REPLACE, to_dbobject(query))
+          when Hash
+            if out.keys.size != 1
+              raise ArgumentError, "You need to specify one key value pair in the out hash"
+            end
+            out_type = out.keys.first
+            out_val = out[out_type]
+            unless MapReduceEnumHash.keys.include?(out_type)
+              raise ArgumentError, "Your out hash must have one of these keys: #{MapReduceEnumHash.keys}"
+            end
+            out_type_enum = MapReduceEnumHash[out_type]
+            out_dest = out_val.is_a?(String) ? out_val : nil
+            JMongo::MapReduceCommand.new(@j_collection, m, r, out_dest, out_type_enum, to_dbobject(query))
           else
-            raise_not_implemented
+            raise ArgumentError, "You need to specify an out parameter in the options hash"
           end
+
       mrc.verbose = verbose
       mrc.sort = prep_sort(sort)
       mrc.limit = limit
       mrc.finalize = finalize
       result =  from_dbobject(@j_db.command(mrc.toDBObject))
-      ap result
+
       if raw
         result
       elsif result["result"]
