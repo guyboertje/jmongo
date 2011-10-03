@@ -15,6 +15,9 @@ The repo was was forked from Chuck Remes's (now deleted) repo.
 INSTALLATION (from Rubygems.org)
   % gem install jmongo
 
+USAGE
+  * Use jruby with 1.9 compatibility turned on JRUBY_OPTS='--1.9'
+
 PROGRESS
 Almost all of the Ruby driver API is implemented
 
