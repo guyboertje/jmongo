@@ -6,92 +6,38 @@ lifting. Unfortunately, the performance of the pure ruby path under jruby is les
 stellar. Additionally, the C extension isn't compatible with jruby so we aren't able to take
 advantage of any native code boost.
 
-JMongo solves this problem by putting a thin ruby wrapper around the mongo-java-driver. The
+JMongo solves this problem by putting a thin ruby wrapper around the 10gen mongo-java-driver. The
 goal is to provide a drop-in replacement for the mongo and bson gems along with complete
 API compatibility.
 
-The initial version of this gem only wraps enough functionality to cover my personal use-cases.
-I encourage project forking.
+The repo was was forked from Chuck Remes's (now deleted) repo.
 
-INSTALLATION
-  % gem build jmongo.gemspec
-  % gem install jmongo-0.1.0.gem
-
+INSTALLATION (from Rubygems.org)
+  % gem install jmongo
 
 PROGRESS
-The following methods have been ported and have at least basic functionality.
+Almost all of the Ruby driver API is implemented
 
-find
-  - limit, skip and sort
-find_one
-last_status
-insert
+The the Ruby driver tests have been brought over and converted to be MiniTest based and
+the collection and cursor test suites pass. NOTE: a few (2/3) tests have been skipped, you should look at
+them to see if they affect you.
 
-2010-10-16, Guy Boertje ported the following...
+The Mongoid rspec functional suite runs 2607 examples with 28 failures when using JMongo
+My Mongoid repo was forked after this commit (so newer funtionality/spec will be missing)
+  commit 6cc97092bc10535b8b65647a3d14b10ca1b94c8c
+  Author: Bernerd Schaefer <bj.schaefer@gmail.com>
+  Date:   Tue Jun 28 12:59:34 2011 +0200
 
-count
-update
-save
-find_and_modify
-create_index
-ensure_index
-drop_index
-drop_indexes
-drop_collection
-drop_database
-database_names
+The failures are classed in this way:
+  * Different Exception class being raised for BSON invalid keys
+  * Managing Replica Sets directly
+  * Managing Connection Pools directly
+  * XML serialization
+  * Ruby RegExp to BSON encode and decode
 
-Also the returned objects are BSON::OrderedHash objects to match those of the regular ruby mongo library
+I will fix these problems in due course
 
-rough benchmarks
-
-drop collection 'bm' before and after mongo run
-
-require 'rubygems'
-require 'jmongo'
-#require 'mongo'
-require 'benchmark'
-n = 500
-db = Mongo::Connection.new('127.0.0.1',37037).db('bm')
-coll = db.collection('bm')
-ids = []
-docs = []
-Benchmark.bm do |x|
-  x.report("inserts:") do
-    for i in 1..n
-      d = {'n'=>i}
-      ids << coll.insert(d)
-    end
-  end
-  x.report("updates:") do
-    ids.each do |id|
-      coll.update({'_id'=>id},{'$set'=>{'a'=>'blah'}})
-    end
-  end
-  s = {'n'=>{'$gt'=>0}}
-  coll.find(s).each{|d| }
-  coll.find(s).each{|d| }
-  c = coll.find(s)
-  x.report("after find all, iterate:") do
-    c.each do |d|
-      docs << d
-    end
-  end
-end
-db.drop_collection('bm')
-
-Results
-
-ruby --fast --server mongo_bm.rb
-                              user     system      total        real
-                inserts:  0.879000   0.000000   0.879000 (  0.878000)
-                updates:  0.711000   0.000000   0.711000 (  0.711000)
-after find all, iterate:  0.243000   0.000000   0.243000 (  0.243000)
-
-ruby --fast --server jmongo_bm.rb
-                              user     system      total        real
-                inserts:  0.489000   0.000000   0.489000 (  0.489000)
-                updates:  0.357000   0.000000   0.357000 (  0.357000)
-after find all, iterate:  0.058000   0.000000   0.058000 (  0.058000)
-
-
+Please note that the java driver handles the Replica Sets and connection pools
+If you are using Replica Sets and want to use JMongo you should be OK if you use a URI to connect.
+JMongo lets the Java driver handle reading from slaves and writing to master, although YMMV as I have not
+tested JMongo with Replica Sets yet.
