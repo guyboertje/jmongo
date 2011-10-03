@@ -730,6 +730,7 @@ require 'minitest/spec'
   describe "A collection with two records" do
     before do
       @collection = $db.collection('test-collection')
+      @collection.remove
       @collection.insert({:name => "Jones"})
       @collection.insert({:name => "Smith"})
     end
