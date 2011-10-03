@@ -3,6 +3,7 @@ require 'rubygems' if RUBY_VERSION < '1.9.0' && ENV['C_EXT']
 require 'jmongo'
 #require 'test/unit'
 require 'awesome_print'
+
 require 'minitest/autorun'
 
 def silently

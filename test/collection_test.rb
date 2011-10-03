@@ -1,581 +1,580 @@
 require './test/test_helper'
 
+CONNECTION ||= Mongo::Connection.new(TEST_HOST, TEST_PORT, :op_timeout => 10)
+$db   = CONNECTION.db(MONGO_TEST_DB)
+
+VERSION = CONNECTION.server_version
+apr VERSION
+
+def clear_collections
+  $db.collection_names.each do |n|
+    $db.drop_collection(n) unless n =~ /system/
+  end
+end
+
+clear_collections
+
+$test = $db.collection("test")
+
 class TestCollection < MiniTest::Unit::TestCase
-  @@connection ||= standard_connection(:op_timeout => 10)
-  @@db   = @@connection.db(MONGO_TEST_DB)
-  @@db.collection_names.each do |n|
-    @@db.drop_collection(n) unless n =~ /system/
-  end
-
-  @@version = @@connection.server_version
-  apr @@version
-
-  def clear_collections
-    @@db.collection_names.each do |n|
-      @@db.drop_collection(n) unless n =~ /system/
-    end
-    @@test = @@db.collection("test")
-  end
 
   def setup
     clear_collections
   end
 
-#   def test_capped_method
-#     @@db.drop_collection('normal')
-
-#     @@db.create_collection('normal')
-#     assert !@@db['normal'].capped?
-#     @@db.drop_collection('normal')
-
-#     @@db.create_collection('c', :capped => true, :size => 100_000)
-#     assert @@db['c'].capped?
-#     @@db.drop_collection('c')
-#   end
-
-#   def test_optional_pk_factory
-#     @coll_default_pk = @@db.collection('stuff')
-#     assert_equal BSON::ObjectId, @coll_default_pk.pk_factory
-#     @coll_default_pk = @@db.create_collection('more-stuff')
-#     assert_equal BSON::ObjectId, @coll_default_pk.pk_factory
-
-#     # Create a db with a pk_factory.
-#     @db = Connection.new(ENV['MONGO_RUBY_DRIVER_HOST'] || 'localhost',
-#                          ENV['MONGO_RUBY_DRIVER_PORT'] || Connection::DEFAULT_PORT).db(MONGO_TEST_DB, :pk => Object.new)
-#     @coll = @db.collection('coll-with-pk')
-#     assert @coll.pk_factory.is_a?(Object)
-
-#     @coll = @db.create_collection('created_coll_with_pk')
-#     assert @coll.pk_factory.is_a?(Object)
-#   end
-
-#   class TestPK
-#     def self.create_pk
-#     end
-#   end
-
-#   def test_pk_factory_on_collection
-#     @coll2 = Collection.new('foo', @@db, :pk => TestPK)
-#     assert_equal TestPK, @coll2.pk_factory
-#   end
-
-#   def test_valid_names
-#     assert_raises Mongo::InvalidNSName do
-#       @@db["te$t"]
-#     end
-
-#     assert_raises Mongo::InvalidNSName do
-#       @@db['$main']
-#     end
-
-#     assert @@db['$cmd']
-#     assert @@db['oplog.$main']
-#   end
-
-#   def test_collection
-#     assert_kind_of Collection, @@db["test"]
-#     assert_equal @@db["test"].name(), @@db.collection("test").name()
-#     assert_equal @@db["test"].name(), @@db[:test].name()
-
-#     assert_kind_of Collection, @@db["test"]["foo"]
-#     assert_equal @@db["test"]["foo"].name(), @@db.collection("test.foo").name()
-#     assert_equal @@db["test"]["foo"].name(), @@db["test.foo"].name()
-
-#     @@db["test"]["foo"].remove
-#     @@db["test"]["foo"].insert("x" => 5)
-#     assert_equal 5, @@db.collection("test.foo").find_one()["x"]
-#   end
-
-#   def test_rename_collection
-#     @@db.drop_collection('foo1')
-#     @@db.drop_collection('bar1')
-
-#     @col = @@db.create_collection('foo1')
-#     assert_equal 'foo1', @col.name
-
-#     @col.rename('bar1')
-#     assert_equal 'bar1', @col.name
-#   end
-# # java driver does not allow nil ids
-#   # def test_nil_id
-#   #   assert_equal 5, @@test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
-#   #   assert_equal 5, @@test.save({"_id" => 5, "foo" => "baz"}, {:safe => true})
-#   #   assert_equal nil, @@test.find_one("foo" => "bar")
-#   #   assert_equal "baz", @@test.find_one(:_id => 5)["foo"]
-#   #   assert_raises OperationFailure do
-#   #     @@test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
-#   #   end
-
-#   #   assert_equal nil, @@test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
-#   #   assert_equal nil, @@test.save({"_id" => nil, "foo" => "baz"}, {:safe => true})
-#   #   assert_equal nil, @@test.find_one("foo" => "bar")
-#   #   assert_equal "baz", @@test.find_one(:_id => nil)["foo"]
-#   #   assert_raises OperationFailure do
-#   #     @@test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
-#   #   end
-#   #   assert_raises OperationFailure do
-#   #     @@test.insert({:_id => nil, "foo" => "bar"}, {:safe => true})
-#   #   end
-#   # end
-
-#   if @@version > "1.1"
-#     def setup_for_distinct
-#       @@test.remove
-#       @@test.insert([{:a => 0, :b => {:c => "a"}},
-#                      {:a => 1, :b => {:c => "b"}},
-#                      {:a => 1, :b => {:c => "c"}},
-#                      {:a => 2, :b => {:c => "a"}},
-#                      {:a => 3},
-#                      {:a => 3}])
-#     end
-
-#     def test_distinct_queries
-#       setup_for_distinct
-#       assert_equal [0, 1, 2, 3], @@test.distinct(:a).sort
-#       assert_equal ["a", "b", "c"], @@test.distinct("b.c").sort
-#     end
-
-#     if @@version >= "1.2"
-#       def test_filter_collection_with_query
-#         setup_for_distinct
-#         assert_equal [2, 3], @@test.distinct(:a, {:a => {"$gt" => 1}}).sort
-#       end
-
-#       def test_filter_nested_objects
-#         setup_for_distinct
-#         assert_equal ["a", "b"], @@test.distinct("b.c", {"b.c" => {"$ne" => "c"}}).sort
-#       end
-#     end
-#   end
-
-#   def test_safe_insert
-#     @@test.create_index("hello", :unique => true)
-#     a = {"hello" => "world"}
-#     @@test.insert(a)
-#     @@test.insert(a)
-#     assert(@@db.get_last_error['err'].include?("11000"))
-
-#     assert_raises OperationFailure do
-#       @@test.insert(a, :safe => true)
-#     end
-#   end
-
-#   def test_bulk_insert_with_continue_on_error
-#     if @@version >= "2.0"
-#       @@test.create_index([["foo", 1]], :unique => true)
-#       docs = []
-#       docs << {:foo => 1}
-#       docs << {:foo => 1}
-#       docs << {:foo => 2}
-#       docs << {:foo => 3}
-#       assert_raises OperationFailure do
-#         @@test.insert(docs, :safe => true)
-#       end
-#       assert_equal 1, @@test.count
-#       @@test.remove
-
-#       docs = []
-#       docs << {:foo => 1}
-#       docs << {:foo => 1}
-#       docs << {:foo => 2}
-#       docs << {:foo => 3}
-#       docs << {:foo => 3}
-#       assert_raises OperationFailure do
-#         @@test.insert(docs, :safe => true, :continue_on_error => true)
-#       end
-#       assert_equal 3, @@test.count
-
-#       @@test.remove
-#       @@test.drop_index("foo_1")
-#     end
-#   end
-
-#   # java driver does not enforce a maximum
-#   # def test_maximum_insert_size
-#   #   docs = []
-#   #   16.times do
-#   #     docs << {'foo' => 'a' * 1_000_000}
-#   #   end
-
-#   #   assert_raises InvalidOperation do
-#   #     @@test.insert(docs)
-#   #   end
-#   # end
-
-#   def test_update
-#     id1 = @@test.save("x" => 5)
-#     @@test.update({}, {"$inc" => {"x" => 1}})
-#     assert_equal 1, @@test.count()
-#     assert_equal 6, @@test.find_one(:_id => id1)["x"]
-
-#     id2 = @@test.save("x" => 1)
-#     @@test.update({"x" => 6}, {"$inc" => {"x" => 1}})
-#     assert_equal 7, @@test.find_one(:_id => id1)["x"]
-#     assert_equal 1, @@test.find_one(:_id => id2)["x"]
-#   end
-
-#   def test_multi_update
-#     @@test.save("num" => 10)
-#     @@test.save("num" => 10)
-#     @@test.save("num" => 10)
-#     assert_equal 3, @@test.count
-
-#     @@test.update({"num" => 10}, {"$set" => {"num" => 100}}, :multi => true)
-#     @@test.find.each do |doc|
-#       assert_equal 100, doc["num"]
-#     end
-#   end
-
-#   def test_upsert
-#     @@test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
-#     @@test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
-
-#     assert_equal 1, @@test.count()
-#     assert_equal 2, @@test.find_one()["count"]
-#   end
-
-#   def test_safe_update
-#     @@test.create_index("x", :unique => true)
-#     @@test.insert("x" => 5)
-#     @@test.insert("x" => 10)
-
-#     # Can update an indexed collection.
-#     @@test.update({}, {"$inc" => {"x" => 1}})
-#     assert !@@db.error?
-
-#     # Can't duplicate an index.
-#     assert_raises OperationFailure do
-#       @@test.update({}, {"x" => 10}, :safe => true)
-#     end
-#   end
-
-#   def test_safe_save
-#     @@test.create_index("hello", :unique => true)
-
-#     @@test.save("hello" => "world")
-#     @@test.save("hello" => "world")
-
-#     assert_raises OperationFailure do
-#       @@test.save({"hello" => "world"}, :safe => true)
-#     end
-#   end
-
-#   def test_safe_remove
-#     @conn = standard_connection
-#     @db   = @conn[MONGO_TEST_DB]
-#     @test = @db['test-safe-remove']
-#     @test.save({:a => 50})
-#     assert_equal 1, @test.remove({}, :safe => true)["n"]
-#     @test.drop
-#   end
-
-#   def test_remove_return_value
-#     assert_equal true, @@test.remove({})
-#   end
-
-#   def test_count
-
-#     assert_equal 0, @@test.count
-#     @@test.save(:x => 1)
-#     @@test.save(:x => 2)
-#     assert_equal 2, @@test.count
-
-#     assert_equal 1, @@test.count(:query => {:x => 1})
-#     assert_equal 1, @@test.count(:limit => 1)
-#     assert_equal 0, @@test.count(:skip => 2)
-#   end
-
-#   # Note: #size is just an alias for #count.
-#   def test_size
-#     assert_equal 0, @@test.count
-#     assert_equal @@test.size, @@test.count
-#     @@test.save("x" => 1)
-#     @@test.save("x" => 2)
-#     assert_equal @@test.size, @@test.count
-#   end
-
-#   def test_no_timeout_option
-
-#     assert_raises ArgumentError, "Timeout can be set to false only when #find is invoked with a block." do
-#       @@test.find({}, :timeout => false)
-#     end
-
-#     @@test.find({}, :timeout => false) do |cursor|
-#       assert_equal 0, cursor.count
-#     end
-
-#     @@test.save("x" => 1)
-#     @@test.save("x" => 2)
-#     @@test.find({}, :timeout => false) do |cursor|
-#       assert_equal 2, cursor.count
-#     end
-#   end
-
-#   def test_default_timeout
-#     cursor = @@test.find
-#     assert_equal true, cursor.timeout
-#   end
-
-#   def test_fields_as_hash
-#     @@test.save(:a => 1, :b => 1, :c => 1)
-
-#     doc = @@test.find_one({:a => 1}, :fields => {:b => 0})
-#     assert_nil doc['b']
-#     assert doc['a']
-#     assert doc['c']
-
-#     doc = @@test.find_one({:a => 1}, :fields => {:a => 1, :b => 1})
-#     assert_nil doc['c']
-#     assert doc['a']
-#     assert doc['b']
-
-
-#     assert_raises Mongo::OperationFailure do
-#       @@test.find_one({:a => 1}, :fields => {:a => 1, :b => 0})
-#     end
-#   end
-
-#   if @@version >= "1.5.1"
-#     def test_fields_with_slice
-#       @@test.save({:foo => [1, 2, 3, 4, 5, 6], :test => 'slice'})
-
-#       doc = @@test.find_one({:test => 'slice'}, :fields => {'foo' => {'$slice' => [0, 3]}})
-#       assert_equal [1, 2, 3], doc['foo']
-#       @@test.remove
-#     end
-#   end
-
-#   def test_find_one
-#     id = @@test.save("hello" => "world", "foo" => "bar")
-
-#     assert_equal "world", @@test.find_one()["hello"]
-#     assert_equal @@test.find_one(id), @@test.find_one()
-#     assert_equal @@test.find_one(nil), @@test.find_one()
-#     assert_equal @@test.find_one({}), @@test.find_one()
-#     assert_equal @@test.find_one("hello" => "world"), @@test.find_one()
-#     assert_equal @@test.find_one(BSON::OrderedHash["hello", "world"]), @@test.find_one()
-
-#     assert @@test.find_one(nil, :fields => ["hello"]).include?("hello")
-#     assert !@@test.find_one(nil, :fields => ["foo"]).include?("hello")
-#     assert_equal ["_id"], @@test.find_one(nil, :fields => []).keys()
-
-#     assert_equal nil, @@test.find_one("hello" => "foo")
-#     assert_equal nil, @@test.find_one(BSON::OrderedHash["hello", "foo"])
-#     assert_equal nil, @@test.find_one(ObjectId.new)
-
-#     assert_raises TypeError do
-#       @@test.find_one(6)
-#     end
-#   end
-
-#   def test_insert_adds_id
-#     doc = {"hello" => "world"}
-#     @@test.insert(doc)
-#     assert(doc.include?(:_id))
-
-#     docs = [{"hello" => "world"}, {"hello" => "world"}]
-#     @@test.insert(docs)
-#     docs.each do |d|
-#       assert(d.include?(:_id))
-#     end
-#   end
-
-#   def test_save_adds_id
-#     doc = {"hello" => "world"}
-#     @@test.save(doc)
-#     assert(doc.include?(:_id))
-#   end
-
-#   def test_optional_find_block
-#     10.times do |i|
-#       @@test.save("i" => i)
-#     end
-
-#     x = nil
-#     @@test.find("i" => 2) { |cursor|
-#       x = cursor.count()
-#     }
-#     assert_equal 1, x
-
-#     i = 0
-#     @@test.find({}, :skip => 5) do |cursor|
-#       cursor.each do |doc|
-#         i = i + 1
-#       end
-#     end
-#     assert_equal 5, i
-
-#     c = nil
-#     @@test.find() do |cursor|
-#       c = cursor
-#     end
-#     assert c.closed?
-#   end
-
-#   def test_map_reduce
-#     @@test << { "user_id" => 1 }
-#     @@test << { "user_id" => 2 }
-#     m = "function() { emit(this.user_id, 1); }"
-#     r = "function(k,vals) { return 1; }"
-#     res = @@test.map_reduce(m, r, :out => 'foo');
-#     assert res.find_one({"_id" => 1})
-#     assert res.find_one({"_id" => 2})
-#   end
-
-#   def test_map_reduce_with_code_objects
-#     @@test << { "user_id" => 1 }
-#     @@test << { "user_id" => 2 }
-#     m = Code.new("function() { emit(this.user_id, 1); }")
-#     r = Code.new("function(k,vals) { return 1; }")
-#     res = @@test.map_reduce(m, r, :out => 'foo');
-#     assert res.find_one({"_id" => 1})
-#     assert res.find_one({"_id" => 2})
-#   end
-
-#   def test_map_reduce_with_options
-#     @@test << { "user_id" => 1 }
-#     @@test << { "user_id" => 2 }
-#     @@test << { "user_id" => 3 }
-#     m = Code.new("function() { emit(this.user_id, 1); }")
-#     r = Code.new("function(k,vals) { return 1; }")
-#     res = @@test.map_reduce(m, r, :query => {"user_id" => {"$gt" => 1}}, :out => 'foo');
-#     assert_equal 2, res.count
-#     assert res.find_one({"_id" => 2})
-#     assert res.find_one({"_id" => 3})
-#   end
-
-#   def test_map_reduce_with_raw_response
-#     @@test << { "user_id" => 1 }
-#     @@test << { "user_id" => 2 }
-#     @@test << { "user_id" => 3 }
-#     m = Code.new("function() { emit(this.user_id, 1); }")
-#     r = Code.new("function(k,vals) { return 1; }")
-#     res = @@test.map_reduce(m, r, :raw => true, :out => 'foo')
-#     assert res["result"]
-#     assert res["counts"]
-#     assert res["timeMillis"]
-#   end
-
-#   def test_map_reduce_with_output_collection
-#     @@test << { "user_id" => 1 }
-#     @@test << { "user_id" => 2 }
-#     @@test << { "user_id" => 3 }
-#     output_collection = "test-map-coll"
-#     m = Code.new("function() { emit(this.user_id, 1); }")
-#     r = Code.new("function(k,vals) { return 1; }")
-#     res = @@test.map_reduce(m, r, :raw => true, :out => output_collection)
-#     assert_equal output_collection, res["result"]
-#     assert res["counts"]
-#     assert res["timeMillis"]
-#   end
-
-#   if @@version >= "1.8.0"
-#     def test_map_reduce_with_collection_merge
-#       @@test << {:user_id => 1}
-#       @@test << {:user_id => 2}
-#       output_collection = "test-map-coll"
-#       m = Code.new("function() { emit(this.user_id, {count: 1}); }")
-#       r = Code.new("function(k,vals) { var sum = 0;" +
-#         " vals.forEach(function(v) { sum += v.count;} ); return {count: sum}; }")
-#       res = @@test.map_reduce(m, r, :out => output_collection)
-
-#       @@test.remove
-#       @@test << {:user_id => 3}
-#       res = @@test.map_reduce(m, r, :out => {:merge => output_collection})
-#       assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 1}
-
-#       @@test.remove
-#       @@test << {:user_id => 3}
-#       res = @@test.map_reduce(m, r, :out => {:reduce => output_collection})
-#       assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 2}
-
-#       assert_raises ArgumentError do
-#         @@test.map_reduce(m, r, :out => {:inline => 1})
-#       end
-
-#       @@test.map_reduce(m, r, :raw => true, :out => {:inline => 1})
-#       assert res["results"]
-#     end
-#   end
-
-#   if @@version > "1.3.0"
-#     def test_find_and_modify
-#       @@test << { :a => 1, :processed => false }
-#       @@test << { :a => 2, :processed => false }
-#       @@test << { :a => 3, :processed => false }
-
-#       @@test.find_and_modify(:query => {}, :sort => [['a', -1]], :update => {"$set" => {:processed => true}})
-
-#       assert @@test.find_one({:a => 3})['processed']
-#     end
-
-#     def test_find_and_modify_with_invalid_options
-#       @@test << { :a => 1, :processed => false }
-#       @@test << { :a => 2, :processed => false }
-#       @@test << { :a => 3, :processed => false }
-
-#       assert_raises Mongo::OperationFailure do
-#         @@test.find_and_modify(:blimey => {})
-#       end
-#     end
-#   end
-
-#   if @@version >= "1.3.5"
-#     def test_coll_stats
-#       @@test << {:n => 1}
-#       @@test.create_index("n")
-#       stats = @@test.stats
-#       assert_equal "#{MONGO_TEST_DB}.test", stats['ns']
-#     end
-#   end
-
-#   def test_saving_dates_pre_epoch
-#     begin
-#       @@test.save({'date' => Time.utc(1600)})
-#       assert_in_delta Time.utc(1600), @@test.find_one()["date"], 2
-#     rescue ArgumentError
-#       # See note in test_date_before_epoch (BSONTest)
-#     end
-#   end
-
-  def test_save_symbol_find_string
-    @@test.save(:foo => :mike, :foo1 => 'mike')
-
-    assert_equal :mike, @@test.find_one(:foo => :mike)["foo"]
-    assert_equal :mike, @@test.find_one("foo" => :mike)["foo"]
-    assert_equal 'mike', @@test.find_one("foo" => :mike)["foo1"]
-
-    # TODO enable these tests conditionally based on server version (if >1.0)
-    # assert_equal :mike, @@test.find_one(:foo => "mike")["foo"]
-    # assert_equal :mike, @@test.find_one("foo" => "mike")["foo"]
+  def test_capped_method
+    $db.drop_collection('normal')
+
+    $db.create_collection('normal')
+    assert !$db['normal'].capped?
+    $db.drop_collection('normal')
+
+    $db.create_collection('c', :capped => true, :size => 100_000)
+    assert $db['c'].capped?
+    $db.drop_collection('c')
   end
-end
 
-__END__
-  def test_limit_and_skip
-    10.times do |i|
-      @@test.save(:foo => i)
+  def test_optional_pk_factory
+    @coll_default_pk = $db.collection('stuff')
+    assert_equal BSON::ObjectId, @coll_default_pk.pk_factory
+    @coll_default_pk = $db.create_collection('more-stuff')
+    assert_equal BSON::ObjectId, @coll_default_pk.pk_factory
+
+    # Create a db with a pk_factory.
+    @db = Connection.new(ENV['MONGO_RUBY_DRIVER_HOST'] || 'localhost',
+                         ENV['MONGO_RUBY_DRIVER_PORT'] || Connection::DEFAULT_PORT).db(MONGO_TEST_DB, :pk => Object.new)
+    @coll = @db.collection('coll-with-pk')
+    assert @coll.pk_factory.is_a?(Object)
+
+    @coll = @db.create_collection('created_coll_with_pk')
+    assert @coll.pk_factory.is_a?(Object)
+  end
+
+  class TestPK
+    def self.create_pk
+    end
+  end
+
+  def test_pk_factory_on_collection
+    @coll2 = Collection.new('foo', $db, :pk => TestPK)
+    assert_equal TestPK, @coll2.pk_factory
+  end
+
+  def test_valid_names
+    assert_raises Mongo::InvalidNSName do
+      $db["te$t"]
     end
 
-    assert_equal 5, @@test.find({}, :skip => 5).next_document()["foo"]
-    assert_equal nil, @@test.find({}, :skip => 10).next_document()
+    assert_raises Mongo::InvalidNSName do
+      $db['$main']
+    end
 
-    assert_equal 5, @@test.find({}, :limit => 5).to_a.length
+    assert $db['$cmd']
+    assert $db['oplog.$main']
+  end
 
-    assert_equal 3, @@test.find({}, :skip => 3, :limit => 5).next_document()["foo"]
-    assert_equal 5, @@test.find({}, :skip => 3, :limit => 5).to_a.length
+  def test_collection
+    assert_kind_of Collection, $db["test"]
+    assert_equal $db["test"].name(), $db.collection("test").name()
+    assert_equal $db["test"].name(), $db[:test].name()
+
+    assert_kind_of Collection, $db["test"]["foo"]
+    assert_equal $db["test"]["foo"].name(), $db.collection("test.foo").name()
+    assert_equal $db["test"]["foo"].name(), $db["test.foo"].name()
+
+    $db["test"]["foo"].remove
+    $db["test"]["foo"].insert("x" => 5)
+    assert_equal 5, $db.collection("test.foo").find_one()["x"]
+  end
+
+  def test_rename_collection
+    $db.drop_collection('foo1')
+    $db.drop_collection('bar1')
+
+    @col = $db.create_collection('foo1')
+    assert_equal 'foo1', @col.name
+
+    @col.rename('bar1')
+    assert_equal 'bar1', @col.name
+  end
+
+  def test_nil_id
+    skip("The Java driver does not allow nil _id")
+    assert_equal 5, $test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
+    assert_equal 5, $test.save({"_id" => 5, "foo" => "baz"}, {:safe => true})
+    assert_equal nil, $test.find_one("foo" => "bar")
+    assert_equal "baz", $test.find_one(:_id => 5)["foo"]
+    assert_raises OperationFailure do
+      $test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
+    end
+
+    assert_equal nil, $test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
+    assert_equal nil, $test.save({"_id" => nil, "foo" => "baz"}, {:safe => true})
+    assert_equal nil, $test.find_one("foo" => "bar")
+    assert_equal "baz", $test.find_one(:_id => nil)["foo"]
+    assert_raises OperationFailure do
+      $test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
+    end
+    assert_raises OperationFailure do
+      $test.insert({:_id => nil, "foo" => "bar"}, {:safe => true})
+    end
+  end
+
+  if VERSION > "1.1"
+    def setup_for_distinct
+      $test.remove
+      $test.insert([{:a => 0, :b => {:c => "a"}},
+                     {:a => 1, :b => {:c => "b"}},
+                     {:a => 1, :b => {:c => "c"}},
+                     {:a => 2, :b => {:c => "a"}},
+                     {:a => 3},
+                     {:a => 3}])
+    end
+
+    def test_distinct_queries
+      setup_for_distinct
+      assert_equal [0, 1, 2, 3], $test.distinct(:a).sort
+      assert_equal ["a", "b", "c"], $test.distinct("b.c").sort
+    end
+
+    if VERSION >= "1.2"
+      def test_filter_collection_with_query
+        setup_for_distinct
+        assert_equal [2, 3], $test.distinct(:a, {:a => {"$gt" => 1}}).sort
+      end
+
+      def test_filter_nested_objects
+        setup_for_distinct
+        assert_equal ["a", "b"], $test.distinct("b.c", {"b.c" => {"$ne" => "c"}}).sort
+      end
+    end
+  end
+
+  def test_safe_insert
+    $test.create_index("hello", :unique => true)
+    a = {"hello" => "world"}
+    $test.insert(a)
+    $test.insert(a)
+    assert($db.get_last_error['err'].include?("11000"))
+
+    assert_raises OperationFailure do
+      $test.insert(a, :safe => true)
+    end
+  end
+
+  def test_bulk_insert_with_continue_on_error
+    if VERSION >= "2.0"
+      $test.create_index([["foo", 1]], :unique => true)
+      docs = []
+      docs << {:foo => 1}
+      docs << {:foo => 1}
+      docs << {:foo => 2}
+      docs << {:foo => 3}
+      assert_raises OperationFailure do
+        $test.insert(docs, :safe => true)
+      end
+      assert_equal 1, $test.count
+      $test.remove
+
+      docs = []
+      docs << {:foo => 1}
+      docs << {:foo => 1}
+      docs << {:foo => 2}
+      docs << {:foo => 3}
+      docs << {:foo => 3}
+      assert_raises OperationFailure do
+        $test.insert(docs, :safe => true, :continue_on_error => true)
+      end
+      assert_equal 3, $test.count
+
+      $test.remove
+      $test.drop_index("foo_1")
+    end
+  end
+
+  def test_maximum_insert_size
+    skip("The Java driver does not enforce a maximum")
+    docs = []
+    16.times do
+      docs << {'foo' => 'a' * 1_000_000}
+    end
+
+    assert_raises InvalidOperation do
+      $test.insert(docs)
+    end
+  end
+
+  def test_update
+    id1 = $test.save("x" => 5)
+    $test.update({}, {"$inc" => {"x" => 1}})
+    assert_equal 1, $test.count()
+    assert_equal 6, $test.find_one(:_id => id1)["x"]
+
+    id2 = $test.save("x" => 1)
+    $test.update({"x" => 6}, {"$inc" => {"x" => 1}})
+    assert_equal 7, $test.find_one(:_id => id1)["x"]
+    assert_equal 1, $test.find_one(:_id => id2)["x"]
+  end
+
+  def test_multi_update
+    $test.save("num" => 10)
+    $test.save("num" => 10)
+    $test.save("num" => 10)
+    assert_equal 3, $test.count
+
+    $test.update({"num" => 10}, {"$set" => {"num" => 100}}, :multi => true)
+    $test.find.each do |doc|
+      assert_equal 100, doc["num"]
+    end
+  end
+
+  def test_upsert
+    $test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
+    $test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
+
+    assert_equal 1, $test.count()
+    assert_equal 2, $test.find_one()["count"]
+  end
+
+  def test_safe_update
+    $test.create_index("x", :unique => true)
+    $test.insert("x" => 5)
+    $test.insert("x" => 10)
+
+    # Can update an indexed collection.
+    $test.update({}, {"$inc" => {"x" => 1}})
+    assert !$db.error?
+
+    # Can't duplicate an index.
+    assert_raises OperationFailure do
+      $test.update({}, {"x" => 10}, :safe => true)
+    end
+  end
+
+  def test_safe_save
+    $test.create_index("hello", :unique => true)
+
+    $test.save("hello" => "world")
+    $test.save("hello" => "world")
+
+    assert_raises OperationFailure do
+      $test.save({"hello" => "world"}, :safe => true)
+    end
+  end
+
+  def test_safe_remove
+    @conn = standard_connection
+    @db   = @conn[MONGO_TEST_DB]
+    @test = @db['test-safe-remove']
+    @test.save({:a => 50})
+    assert_equal 1, @test.remove({}, :safe => true)["n"]
+    @test.drop
+  end
+
+  def test_remove_return_value
+    assert_equal true, $test.remove({})
+  end
+
+  def test_count
+
+    assert_equal 0, $test.count
+    $test.save(:x => 1)
+    $test.save(:x => 2)
+    assert_equal 2, $test.count
+
+    assert_equal 1, $test.count(:query => {:x => 1})
+    assert_equal 1, $test.count(:limit => 1)
+    assert_equal 0, $test.count(:skip => 2)
+  end
+
+  # Note: #size is just an alias for #count.
+  def test_size
+    assert_equal 0, $test.count
+    assert_equal $test.size, $test.count
+    $test.save("x" => 1)
+    $test.save("x" => 2)
+    assert_equal $test.size, $test.count
+  end
+
+  def test_no_timeout_option
+
+    assert_raises ArgumentError, "Timeout can be set to false only when #find is invoked with a block." do
+      $test.find({}, :timeout => false)
+    end
+
+    $test.find({}, :timeout => false) do |cursor|
+      assert_equal 0, cursor.count
+    end
+
+    $test.save("x" => 1)
+    $test.save("x" => 2)
+    $test.find({}, :timeout => false) do |cursor|
+      assert_equal 2, cursor.count
+    end
+  end
+
+  def test_default_timeout
+    cursor = $test.find
+    assert_equal true, cursor.timeout
+  end
+
+  def test_fields_as_hash
+    $test.save(:a => 1, :b => 1, :c => 1)
+
+    doc = $test.find_one({:a => 1}, :fields => {:b => 0})
+    assert_nil doc['b']
+    assert doc['a']
+    assert doc['c']
+
+    doc = $test.find_one({:a => 1}, :fields => {:a => 1, :b => 1})
+    assert_nil doc['c']
+    assert doc['a']
+    assert doc['b']
+
+
+    assert_raises Mongo::OperationFailure do
+      $test.find_one({:a => 1}, :fields => {:a => 1, :b => 0})
+    end
+  end
+
+  if VERSION >= "1.5.1"
+    def test_fields_with_slice
+      $test.save({:foo => [1, 2, 3, 4, 5, 6], :test => 'slice'})
+
+      doc = $test.find_one({:test => 'slice'}, :fields => {'foo' => {'$slice' => [0, 3]}})
+      assert_equal [1, 2, 3], doc['foo']
+      $test.remove
+    end
+  end
+
+  def test_find_one
+    id = $test.save("hello" => "world", "foo" => "bar")
+
+    assert_equal "world", $test.find_one()["hello"]
+    assert_equal $test.find_one(id), $test.find_one()
+    assert_equal $test.find_one(nil), $test.find_one()
+    assert_equal $test.find_one({}), $test.find_one()
+    assert_equal $test.find_one("hello" => "world"), $test.find_one()
+    assert_equal $test.find_one(BSON::OrderedHash["hello", "world"]), $test.find_one()
+
+    assert $test.find_one(nil, :fields => ["hello"]).include?("hello")
+    assert !$test.find_one(nil, :fields => ["foo"]).include?("hello")
+    assert_equal ["_id"], $test.find_one(nil, :fields => []).keys()
+
+    assert_equal nil, $test.find_one("hello" => "foo")
+    assert_equal nil, $test.find_one(BSON::OrderedHash["hello", "foo"])
+    assert_equal nil, $test.find_one(ObjectId.new)
+
+    assert_raises TypeError do
+      $test.find_one(6)
+    end
+  end
+
+  def test_insert_adds_id
+    doc = {"hello" => "world"}
+    $test.insert(doc)
+    assert(doc.include?(:_id))
+
+    docs = [{"hello" => "world"}, {"hello" => "world"}]
+    $test.insert(docs)
+    docs.each do |d|
+      assert(d.include?(:_id))
+    end
+  end
+
+  def test_save_adds_id
+    doc = {"hello" => "world"}
+    $test.save(doc)
+    assert(doc.include?(:_id))
+  end
+
+  def test_optional_find_block
+    10.times do |i|
+      $test.save("i" => i)
+    end
+
+    x = nil
+    $test.find("i" => 2) { |cursor|
+      x = cursor.count()
+    }
+    assert_equal 1, x
+
+    i = 0
+    $test.find({}, :skip => 5) do |cursor|
+      cursor.each do |doc|
+        i = i + 1
+      end
+    end
+    assert_equal 5, i
+
+    c = nil
+    $test.find() do |cursor|
+      c = cursor
+    end
+    assert c.closed?
+  end
+
+  def test_map_reduce
+    $test << { "user_id" => 1 }
+    $test << { "user_id" => 2 }
+    m = "function() { emit(this.user_id, 1); }"
+    r = "function(k,vals) { return 1; }"
+    res = $test.map_reduce(m, r, :out => 'foo');
+    assert res.find_one({"_id" => 1})
+    assert res.find_one({"_id" => 2})
+  end
+
+  def test_map_reduce_with_code_objects
+    $test << { "user_id" => 1 }
+    $test << { "user_id" => 2 }
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = $test.map_reduce(m, r, :out => 'foo');
+    assert res.find_one({"_id" => 1})
+    assert res.find_one({"_id" => 2})
+  end
+
+  def test_map_reduce_with_options
+    $test << { "user_id" => 1 }
+    $test << { "user_id" => 2 }
+    $test << { "user_id" => 3 }
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = $test.map_reduce(m, r, :query => {"user_id" => {"$gt" => 1}}, :out => 'foo');
+    assert_equal 2, res.count
+    assert res.find_one({"_id" => 2})
+    assert res.find_one({"_id" => 3})
+  end
+
+  def test_map_reduce_with_raw_response
+    $test << { "user_id" => 1 }
+    $test << { "user_id" => 2 }
+    $test << { "user_id" => 3 }
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = $test.map_reduce(m, r, :raw => true, :out => 'foo')
+    assert res["result"]
+    assert res["counts"]
+    assert res["timeMillis"]
+  end
+
+  def test_map_reduce_with_output_collection
+    $test << { "user_id" => 1 }
+    $test << { "user_id" => 2 }
+    $test << { "user_id" => 3 }
+    output_collection = "test-map-coll"
+    m = Code.new("function() { emit(this.user_id, 1); }")
+    r = Code.new("function(k,vals) { return 1; }")
+    res = $test.map_reduce(m, r, :raw => true, :out => output_collection)
+    assert_equal output_collection, res["result"]
+    assert res["counts"]
+    assert res["timeMillis"]
+  end
+
+  if VERSION >= "1.8.0"
+    def test_map_reduce_with_collection_merge
+      $test << {:user_id => 1}
+      $test << {:user_id => 2}
+      output_collection = "test-map-coll"
+      m = Code.new("function() { emit(this.user_id, {count: 1}); }")
+      r = Code.new("function(k,vals) { var sum = 0;" +
+        " vals.forEach(function(v) { sum += v.count;} ); return {count: sum}; }")
+      res = $test.map_reduce(m, r, :out => output_collection)
+
+      $test.remove
+      $test << {:user_id => 3}
+      res = $test.map_reduce(m, r, :out => {:merge => output_collection})
+      assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 1}
+
+      $test.remove
+      $test << {:user_id => 3}
+      res = $test.map_reduce(m, r, :out => {:reduce => output_collection})
+      assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 2}
+
+      assert_raises ArgumentError do
+        $test.map_reduce(m, r, :out => {:inline => 1})
+      end
+
+      $test.map_reduce(m, r, :raw => true, :out => {:inline => 1})
+      assert res["results"]
+    end
+  end
+
+  if VERSION > "1.3.0"
+    def test_find_and_modify
+      $test << { :a => 1, :processed => false }
+      $test << { :a => 2, :processed => false }
+      $test << { :a => 3, :processed => false }
+
+      $test.find_and_modify(:query => {}, :sort => [['a', -1]], :update => {"$set" => {:processed => true}})
+
+      assert $test.find_one({:a => 3})['processed']
+    end
+
+    def test_find_and_modify_with_invalid_options
+      $test << { :a => 1, :processed => false }
+      $test << { :a => 2, :processed => false }
+      $test << { :a => 3, :processed => false }
+
+      assert_raises Mongo::OperationFailure do
+        $test.find_and_modify(:blimey => {})
+      end
+    end
+  end
+
+  if VERSION >= "1.3.5"
+    def test_coll_stats
+      $test << {:n => 1}
+      $test.create_index("n")
+      stats = $test.stats
+      assert_equal "#{MONGO_TEST_$db}.test", stats['ns']
+    end
+  end
+
+  def test_saving_dates_pre_epoch
+    begin
+      $test.save({'date' => Time.utc(1600)})
+      assert_in_delta Time.utc(1600), $test.find_one()["date"], 2
+    rescue ArgumentError
+      # See note in test_date_before_epoch (BSONTest)
+    end
+  end
+
+  def test_save_symbol_find_string
+    $test.save(:foo => :mike, :foo1 => 'mike')
+
+    assert_equal :mike, $test.find_one(:foo => :mike)["foo"]
+    assert_equal :mike, $test.find_one("foo" => :mike)["foo"]
+    assert_equal 'mike', $test.find_one("foo" => :mike)["foo1"]
+
+    assert_equal :mike, $test.find_one(:foo => "mike")["foo"]
+    assert_equal :mike, $test.find_one("foo" => "mike")["foo"]
+  end
+
+  def test_limit_and_skip
+    10.times do |i|
+      $test.save(:foo => i)
+    end
+
+    assert_equal 5, $test.find({}, :skip => 5).next_document()["foo"]
+    assert_equal nil, $test.find({}, :skip => 10).next_document()
+
+    assert_equal 5, $test.find({}, :limit => 5).to_a.length
+
+    assert_equal 3, $test.find({}, :skip => 3, :limit => 5).next_document()["foo"]
+    assert_equal 5, $test.find({}, :skip => 3, :limit => 5).to_a.length
   end
 
   def test_large_limit
     2000.times do |i|
-      @@test.insert("x" => i, "y" => "mongomongo" * 1000)
+      $test.insert("x" => i, "y" => "mongomongo" * 1000)
     end
 
-    assert_equal 2000, @@test.count
+    assert_equal 2000, $test.count
 
     i = 0
     y = 0
-    @@test.find({}, :limit => 1900).each do |doc|
+    $test.find({}, :limit => 1900).each do |doc|
       i += 1
       y += doc["x"]
     end
@@ -585,13 +584,13 @@ __END__
   end
 
   def test_small_limit
-    @@test.insert("x" => "hello world")
-    @@test.insert("x" => "goodbye world")
+    $test.insert("x" => "hello world")
+    $test.insert("x" => "goodbye world")
 
-    assert_equal 2, @@test.count
+    assert_equal 2, $test.count
 
     x = 0
-    @@test.find({}, :limit => 1).each do |doc|
+    $test.find({}, :limit => 1).each do |doc|
       x += 1
       assert_equal "hello world", doc["x"]
     end
@@ -602,303 +601,307 @@ __END__
   def test_find_with_transformer
     klass       = Struct.new(:id, :a)
     transformer = Proc.new { |doc| klass.new(doc['_id'], doc['a']) }
-    cursor      = @@test.find({}, :transformer => transformer)
+    cursor      = $test.find({}, :transformer => transformer)
     assert_equal(transformer, cursor.transformer)
   end
 
   def test_find_one_with_transformer
     klass       = Struct.new(:id, :a)
     transformer = Proc.new { |doc| klass.new(doc['_id'], doc['a']) }
-    id          = @@test.insert('a' => 1)
-    doc         = @@test.find_one(id, :transformer => transformer)
+    id          = $test.insert('a' => 1)
+    doc         = $test.find_one(id, :transformer => transformer)
     assert_instance_of(klass, doc)
   end
 
   def test_ensure_index
-    @@test.drop_indexes
-    @@test.insert("x" => "hello world")
-    assert_equal 1, @@test.index_information.keys.count #default index
+    $test.drop_indexes
+    $test.insert("x" => "hello world")
+    assert_equal 1, $test.index_information.keys.count #default index
 
-    @@test.ensure_index([["x", Mongo::DESCENDING]], {})
-    assert_equal 2, @@test.index_information.keys.count
-    assert @@test.index_information.keys.include? "x_-1"
+    $test.ensure_index([["x", Mongo::DESCENDING]], {})
+    assert_equal 2, $test.index_information.keys.count
+    assert $test.index_information.keys.include? "x_-1"
 
-    @@test.ensure_index([["x", Mongo::ASCENDING]])
-    assert @@test.index_information.keys.include? "x_1"
+    $test.ensure_index([["x", Mongo::ASCENDING]])
+    assert $test.index_information.keys.include? "x_1"
 
-    @@test.ensure_index([["type", 1], ["date", -1]])
-    assert @@test.index_information.keys.include? "type_1_date_-1"
+    $test.ensure_index([["type", 1], ["date", -1]])
+    assert $test.index_information.keys.include? "type_1_date_-1"
 
-    @@test.drop_index("x_1")
-    assert_equal 3, @@test.index_information.keys.count
-    @@test.drop_index("x_-1")
-    assert_equal 2, @@test.index_information.keys.count
+    $test.drop_index("x_1")
+    assert_equal 3, $test.index_information.keys.count
+    $test.drop_index("x_-1")
+    assert_equal 2, $test.index_information.keys.count
 
-    @@test.ensure_index([["x", Mongo::DESCENDING]], {})
-    assert_equal 3, @@test.index_information.keys.count
-    assert @@test.index_information.keys.include? "x_-1"
+    $test.ensure_index([["x", Mongo::DESCENDING]], {})
+    assert_equal 3, $test.index_information.keys.count
+    assert $test.index_information.keys.include? "x_-1"
 
     # Make sure that drop_index expires cache properly
-    @@test.ensure_index([['a', 1]])
-    assert @@test.index_information.keys.include?("a_1")
-    @@test.drop_index("a_1")
-    assert !@@test.index_information.keys.include?("a_1")
-    @@test.ensure_index([['a', 1]])
-    assert @@test.index_information.keys.include?("a_1")
-    @@test.drop_index("a_1")
+    $test.ensure_index([['a', 1]])
+    assert $test.index_information.keys.include?("a_1")
+    $test.drop_index("a_1")
+    assert !$test.index_information.keys.include?("a_1")
+    $test.ensure_index([['a', 1]])
+    assert $test.index_information.keys.include?("a_1")
+    $test.drop_index("a_1")
   end
 
+end
 
-  # context "Grouping" do
-  #   setup do
-  #     @@test.remove
-  #     @@test.save("a" => 1)
-  #     @@test.save("b" => 1)
-  #     @initial = {"count" => 0}
-  #     @reduce_function = "function (obj, prev) { prev.count += inc_value; }"
-  #   end
+require 'minitest/spec'
 
-  #   should "fail if missing required options" do
-  #     assert_raises MongoArgumentError do
-  #       @@test.group(:initial => {})
-  #     end
+  describe "Grouping" do
+    before do
+      $test.remove
+      $test.save("a" => 1)
+      $test.save("b" => 1)
+      @initial = {"count" => 0}
+      @reduce_function = "function (obj, prev) { prev.count += inc_value; }"
+      @grp_opts = {:initial => @initial, :reduce => BSON::Code.new(@reduce_function, {"inc_value" => 1})}
+    end
 
-  #     assert_raises MongoArgumentError do
-  #       @@test.group(:reduce => "foo")
-  #     end
-  #   end
+    it "should fail if missing required options" do
+      lambda { $test.group(:initial => {}) }.must_raise Mongo::MongoArgumentError
+      lambda { $test.group(:reduce => "foo") }.must_raise Mongo::MongoArgumentError
+    end
 
-  #   should "group results using eval form" do
-  #     assert_equal 1, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 0.5}))[0]["count"]
-  #     assert_equal 2, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 1}))[0]["count"]
-  #     assert_equal 4, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 2}))[0]["count"]
-  #   end
+    it "should group results using eval form" do
+      @grp_opts[:reduce] = BSON::Code.new(@reduce_function, {"inc_value" => 0.5})
+      $test.group( @grp_opts )[0]["count"].must_equal 1
 
-  #   should "finalize grouped results" do
-  #     @finalize = "function(doc) {doc.f = doc.count + 200; }"
-  #     assert_equal 202, @@test.group(:initial => @initial, :reduce => Code.new(@reduce_function, {"inc_value" => 1}), :finalize => @finalize)[0]["f"]
-  #   end
-  # end
+      @grp_opts[:reduce] = BSON::Code.new(@reduce_function, {"inc_value" => 1})
+      $test.group( @grp_opts )[0]["count"].must_equal 2
 
-  # context "Grouping with key" do
-  #   setup do
-  #     @@test.remove
-  #     @@test.save("a" => 1, "pop" => 100)
-  #     @@test.save("a" => 1, "pop" => 100)
-  #     @@test.save("a" => 2, "pop" => 100)
-  #     @@test.save("a" => 2, "pop" => 100)
-  #     @initial = {"count" => 0, "foo" => 1}
-  #     @reduce_function = "function (obj, prev) { prev.count += obj.pop; }"
-  #   end
+      @grp_opts[:reduce] = BSON::Code.new(@reduce_function, {"inc_value" => 2})
+      $test.group( @grp_opts )[0]["count"].must_equal 4
+    end
 
-  #   should "group" do
-  #     result = @@test.group(:key => :a, :initial => @initial, :reduce => @reduce_function)
-  #     assert result.all? { |r| r['count'] == 200 }
-  #   end
-  # end
+    it "should finalize grouped results" do
+      @grp_opts[:finalize] = "function(doc) {doc.f = doc.count + 200; }"
+      $test.group( @grp_opts )[0]["f"].must_equal 202
+    end
+  end
 
-  # context "Grouping with a key function" do
-  #   setup do
-  #     @@test.remove
-  #     @@test.save("a" => 1)
-  #     @@test.save("a" => 2)
-  #     @@test.save("a" => 3)
-  #     @@test.save("a" => 4)
-  #     @@test.save("a" => 5)
-  #     @initial = {"count" => 0}
-  #     @keyf    = "function (doc) { if(doc.a % 2 == 0) { return {even: true}; } else {return {odd: true}} };"
-  #     @reduce  = "function (obj, prev) { prev.count += 1; }"
-  #   end
+  describe "Grouping with key" do
+    before do
+      $test.remove
+      $test.save("a" => 1, "pop" => 100)
+      $test.save("a" => 1, "pop" => 100)
+      $test.save("a" => 2, "pop" => 100)
+      $test.save("a" => 2, "pop" => 100)
+      @initial = {"count" => 0, "foo" => 1}
+      @reduce_function = "function (obj, prev) { prev.count += obj.pop; }"
+    end
 
-  #   should "group results" do
-  #     results = @@test.group(:keyf => @keyf, :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
-  #     assert results[0]['even'] && results[0]['count'] == 2.0
-  #     assert results[1]['odd'] && results[1]['count'] == 3.0
-  #   end
+    it "should group" do
+      result = $test.group(:key => ['a'], :initial => @initial, :reduce => @reduce_function)
+      true.must_equal result.all? { |r| r['count'] == 200 }
+    end
+  end
 
-  #   should "group filtered results" do
-  #     results = @@test.group(:keyf => @keyf, :cond => {:a => {'$ne' => 2}},
-  #       :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
-  #     assert results[0]['even'] && results[0]['count'] == 1.0
-  #     assert results[1]['odd'] && results[1]['count'] == 3.0
-  #   end
-  # end
+  describe "Grouping with a key function" do
+    before do
+      $test.remove
+      $test.save("a" => 1)
+      $test.save("a" => 2)
+      $test.save("a" => 3)
+      $test.save("a" => 4)
+      $test.save("a" => 5)
+      @initial = {"count" => 0}
+      @keyf    = "function (doc) { if(doc.a % 2 == 0) { return {even: true}; } else {return {odd: true}} };"
+      @reduce  = "function (obj, prev) { prev.count += 1; }"
+    end
 
-  # context "A collection with two records" do
-  #   setup do
-  #     @collection = @@db.collection('test-collection')
-  #     @collection.insert({:name => "Jones"})
-  #     @collection.insert({:name => "Smith"})
-  #   end
+    it "should group results" do
+      results = $test.group(:keyf => @keyf, :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
+      true.must_equal results[0]['even'] && results[0]['count'] == 2.0
+      true.must_equal results[1]['odd'] && results[1]['count'] == 3.0
+    end
 
-  #   should "have two records" do
-  #     assert_equal 2, @collection.size
-  #   end
+    it "should group filtered results" do
+      results = $test.group(:keyf => @keyf, :cond => {:a => {'$ne' => 2}},
+        :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
+      true.must_equal results[0]['even'] && results[0]['count'] == 1.0
+      true.must_equal results[1]['odd'] && results[1]['count'] == 3.0
+    end
+  end
 
-  #   should "remove the two records" do
-  #     @collection.remove()
-  #     assert_equal 0, @collection.size
-  #   end
+  describe "A collection with two records" do
+    before do
+      @collection = $db.collection('test-collection')
+      @collection.insert({:name => "Jones"})
+      @collection.insert({:name => "Smith"})
+    end
 
-  #   should "remove all records if an empty document is specified" do
-  #     @collection.remove({})
-  #     assert_equal 0, @collection.find.count
-  #   end
+    it "should have two records" do
+      @collection.size.must_equal 2
+    end
 
-  #   should "remove only matching records" do
-  #     @collection.remove({:name => "Jones"})
-  #     assert_equal 1, @collection.size
-  #   end
-  # end
+    it "should remove the two records" do
+      @collection.remove()
+      @collection.size.must_equal 0
+    end
 
-  # context "Drop index " do
-  #   setup do
-  #     @@db.drop_collection('test-collection')
-  #     @collection = @@db.collection('test-collection')
-  #   end
+    it "should remove all records if an empty document is specified" do
+      @collection.remove({})
+      @collection.find.count.must_equal 0
+    end
 
-  #   should "drop an index" do
-  #     @collection.create_index([['a', Mongo::ASCENDING]])
-  #     assert @collection.index_information['a_1']
-  #     @collection.drop_index([['a', Mongo::ASCENDING]])
-  #     assert_nil @collection.index_information['a_1']
-  #   end
+    it "should remove only matching records" do
+      @collection.remove({:name => "Jones"})
+      @collection.size.must_equal 1
+    end
+  end
 
-  #   should "drop an index which was given a specific name" do
-  #     @collection.create_index([['a', Mongo::DESCENDING]], {:name => 'i_will_not_fear'})
-  #     assert @collection.index_information['i_will_not_fear']
-  #     @collection.drop_index([['a', Mongo::DESCENDING]])
-  #     assert_nil @collection.index_information['i_will_not_fear']
-  #   end
+  describe "Drop index " do
+    before do
+      $db.drop_collection('test-collection')
+      @collection = $db.collection('test-collection')
+    end
 
-  #   should "drops an composite index" do
-  #     @collection.create_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
-  #     assert @collection.index_information['a_-1_b_1']
-  #     @collection.drop_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
-  #     assert_nil @collection.index_information['a_-1_b_1']
-  #   end
+    it "should drop an index" do
+      @collection.create_index([['a', Mongo::ASCENDING]])
+      assert @collection.index_information['a_1']
+      @collection.drop_index([['a', Mongo::ASCENDING]])
+      assert_nil @collection.index_information['a_1']
+    end
 
-  #   should "drops an index with symbols" do
-  #     @collection.create_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
-  #     assert @collection.index_information['a_-1_b_1']
-  #     @collection.drop_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
-  #     assert_nil @collection.index_information['a_-1_b_1']
-  #   end
-  # end
+    it "should drop an index which was given a specific name" do
+      @collection.create_index([['a', Mongo::DESCENDING]], {:name => 'i_will_not_fear'})
+      assert @collection.index_information['i_will_not_fear']
+      @collection.drop_index([['a', Mongo::DESCENDING]])
+      assert_nil @collection.index_information['i_will_not_fear']
+    end
 
-  # context "Creating indexes " do
-  #   setup do
-  #     @@db.drop_collection('geo')
-  #     @@db.drop_collection('test-collection')
-  #     @collection = @@db.collection('test-collection')
-  #     @geo        = @@db.collection('geo')
-  #   end
+    it "should drops an composite index" do
+      @collection.create_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
+      assert @collection.index_information['a_-1_b_1']
+      @collection.drop_index([['a', Mongo::DESCENDING], ['b', Mongo::ASCENDING]])
+      assert_nil @collection.index_information['a_-1_b_1']
+    end
 
-  #   should "create index using symbols" do
-  #     @collection.create_index :foo, :name => :bar
-  #     @geo.create_index :goo, :name => :baz
-  #     assert @collection.index_information['bar']
-  #     @collection.drop_index :bar
-  #     assert_nil @collection.index_information['bar']
-  #     assert @geo.index_information['baz']
-  #     @geo.drop_index(:baz)
-  #     assert_nil @geo.index_information['baz']
-  #   end
+    it "should drops an index with symbols" do
+      @collection.create_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
+      assert @collection.index_information['a_-1_b_1']
+      @collection.drop_index([['a', Mongo::DESCENDING], [:b, Mongo::ASCENDING]])
+      assert_nil @collection.index_information['a_-1_b_1']
+    end
+  end
 
-  #   should "create a geospatial index" do
-  #     @geo.save({'loc' => [-100, 100]})
-  #     @geo.create_index([['loc', Mongo::GEO2D]])
-  #     assert @geo.index_information['loc_2d']
-  #   end
+  describe "Creating indexes " do
+    before do
+      $db.drop_collection('geo')
+      $db.drop_collection('test-collection')
+      @collection = $db.collection('test-collection')
+      @geo        = $db.collection('geo')
+    end
 
-  #   should "create a unique index" do
-  #     @collection.create_index([['a', Mongo::ASCENDING]], :unique => true)
-  #     assert @collection.index_information['a_1']['unique'] == true
-  #   end
+    it "should create index using symbols" do
+      @collection.create_index :foo, :name => :bar
+      @geo.create_index :goo, :name => :baz
+      assert @collection.index_information['bar']
+      @collection.drop_index :bar
+      assert_nil @collection.index_information['bar']
+      assert @geo.index_information['baz']
+      @geo.drop_index(:baz)
+      assert_nil @geo.index_information['baz']
+    end
 
-  #   should "drop duplicates" do
-  #     @collection.insert({:a => 1})
-  #     @collection.insert({:a => 1})
-  #     assert_equal 2, @collection.find({:a => 1}).count
-  #     @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :dropDups => true)
-  #     assert_equal 1, @collection.find({:a => 1}).count
-  #   end
+    it "should create a geospatial index" do
+      @geo.save({'loc' => [-100, 100]})
+      @geo.create_index([['loc', Mongo::GEO2D]])
+      assert @geo.index_information['loc_2d']
+    end
 
-  #   should "drop duplicates with ruby-like drop_dups key" do
-  #     @collection.insert({:a => 1})
-  #     @collection.insert({:a => 1})
-  #     assert_equal 2, @collection.find({:a => 1}).count
-  #     @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
-  #     assert_equal 1, @collection.find({:a => 1}).count
-  #   end
+    it "should create a unique index" do
+      @collection.create_index([['a', Mongo::ASCENDING]], :unique => true)
+      assert @collection.index_information['a_1']['unique'] == true
+    end
 
-  #   should "drop duplicates with ensure_index and drop_dups key" do
-  #     @collection.insert({:a => 1})
-  #     @collection.insert({:a => 1})
-  #     assert_equal 2, @collection.find({:a => 1}).count
-  #     @collection.ensure_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
-  #     assert_equal 1, @collection.find({:a => 1}).count
-  #   end
+    it "should drop duplicates" do
+      @collection.insert({:a => 1})
+      @collection.insert({:a => 1})
+      assert_equal 2, @collection.find({:a => 1}).count
+      @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :dropDups => true)
+      assert_equal 1, @collection.find({:a => 1}).count
+    end
 
-  #   should "create an index in the background" do
-  #     if @@version > '1.3.1'
-  #       @collection.create_index([['b', Mongo::ASCENDING]], :background => true)
-  #       assert @collection.index_information['b_1']['background'] == true
-  #     else
-  #       assert true
-  #     end
-  #   end
+    it "should drop duplicates with ruby-like drop_dups key" do
+      @collection.insert({:a => 1})
+      @collection.insert({:a => 1})
+      assert_equal 2, @collection.find({:a => 1}).count
+      @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
+      assert_equal 1, @collection.find({:a => 1}).count
+    end
 
-  #   should "require an array of arrays" do
-  #     assert_raises MongoArgumentError do
-  #       @collection.create_index(['c', Mongo::ASCENDING])
-  #     end
-  #   end
+    it "should drop duplicates with ensure_index and drop_dups key" do
+      @collection.insert({:a => 1})
+      @collection.insert({:a => 1})
+      assert_equal 2, @collection.find({:a => 1}).count
+      @collection.ensure_index([['a', Mongo::ASCENDING]], :unique => true, :drop_dups => true)
+      assert_equal 1, @collection.find({:a => 1}).count
+    end
 
-  #   should "enforce proper index types" do
-  #     assert_raises MongoArgumentError do
-  #       @collection.create_index([['c', 'blah']])
-  #     end
-  #   end
+    it "should create an index in the background" do
+      if VERSION > '1.3.1'
+        @collection.create_index([['b', Mongo::ASCENDING]], :background => true)
+        assert @collection.index_information['b_1']['background'] == true
+      else
+        assert true
+      end
+    end
 
-  #   should "raise an error if index name is greater than 128" do
-  #     assert_raises Mongo::OperationFailure do
-  #       @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
-  #         ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]])
-  #     end
-  #   end
+    it "should require an array of arrays" do
+      assert_raises Mongo::MongoArgumentError do
+        @collection.create_index(['c', Mongo::ASCENDING])
+      end
+    end
 
-  #   should "allow for an alternate name to be specified" do
-  #     @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
-  #       ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]], :name => 'foo_index')
-  #     assert @collection.index_information['foo_index']
-  #   end
+    it "should enforce proper index types" do
+      assert_raises Mongo::MongoArgumentError do
+        @collection.create_index([['c', 'blah']])
+      end
+    end
 
-  #   should "allow creation of multiple indexes" do
-  #     assert @collection.create_index([['a', 1]])
-  #     assert @collection.create_index([['a', 1]])
-  #   end
+    it "should raise an error if index name is greater than 128" do
+      assert_raises Mongo::OperationFailure do
+        @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
+          ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]])
+      end
+    end
 
-  #   context "with an index created" do
-  #     setup do
-  #       @collection.create_index([['b', 1], ['a', 1]])
-  #     end
+    it "should allow for an alternate name to be specified" do
+      @collection.create_index([['a' * 25, 1], ['b' * 25, 1],
+        ['c' * 25, 1], ['d' * 25, 1], ['e' * 25, 1]], :name => 'foo_index')
+      assert @collection.index_information['foo_index']
+    end
 
-  #     should "return properly ordered index information" do
-  #       assert @collection.index_information['b_1_a_1']
-  #     end
-  #   end
-  # end
+    it "should allow creation of multiple indexes" do
+      assert @collection.create_index([['a', 1]])
+      assert @collection.create_index([['a', 1]])
+    end
 
-  # context "Capped collections" do
-  #   setup do
-  #     @@db.drop_collection('log')
-  #     @capped = @@db.create_collection('log', :capped => true, :size => 1024)
+    describe "with an index created" do
+      before do
+        @collection.create_index([['b', 1], ['a', 1]])
+      end
+
+      it "should return properly ordered index information" do
+        assert @collection.index_information['b_1_a_1']
+      end
+    end
+  end
+
+  # describe "Capped collections" do
+  #   before do
+  #     $db.drop_collection('log')
+  #     @capped = $db.create_collection('log', :capped => true, :size => 1024)
 
   #     10.times { |n| @capped.insert({:n => n}) }
   #   end
 
-  #   should "find using a standard cursor" do
+  #   it "should find using a standard cursor" do
   #     cursor = @capped.find
   #     10.times do
   #       assert cursor.next_document
@@ -908,8 +911,8 @@ __END__
   #     assert_nil cursor.next_document
   #   end
 
-  #   should "fail tailable cursor on a non-capped collection" do
-  #     col = @@db['regular-collection']
+  #   it "should fail tailable cursor on a non-capped collection" do
+  #     col = $db['regular-collection']
   #     col.insert({:a => 1000})
   #     tail = Cursor.new(col, :tailable => true, :order => [['$natural', 1]])
   #     assert_raises OperationFailure do
@@ -917,7 +920,7 @@ __END__
   #     end
   #   end
 
-  #   should "find using a tailable cursor" do
+  #   it "should find using a tailable cursor" do
   #     tail = Cursor.new(@capped, :tailable => true, :order => [['$natural', 1]])
   #     10.times do
   #       assert tail.next_document
@@ -927,4 +930,3 @@ __END__
   #     assert tail.next_document
   #   end
   # end
-end

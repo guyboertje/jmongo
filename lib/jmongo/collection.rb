@@ -35,7 +35,7 @@ module Mongo
     # @return [Collection]
     #
     # @core collections constructor_details
-    #db, name, pk_factory=nil, j_collection=nil
+    #db, name, options=nil, j_collection=nil
     def initialize(*args)
       j_collection = nil
       @opts = {}
@@ -138,8 +138,7 @@ module Mongo
     #
     # @core find find-instance_method
     def find(selector={}, opts={})
-      fields = opts.delete(:fields)
-      fields = ["_id"] if fields && fields.empty?
+      fields = prep_fields(opts.delete(:fields))
       skip   = opts.delete(:skip) || skip || 0
       limit  = opts.delete(:limit) || 0
       sort   = opts.delete(:sort)
@@ -162,8 +161,8 @@ module Mongo
 
       cursor = Cursor.new(self, :selector => selector, :fields => fields, :skip => skip, :limit => limit,
                                 :order => sort, :hint => hint, :snapshot => snapshot,
-                                :batch_size => batch_size, :timeout => timeout)#,
-                                #:transformer => transformer)
+                                :batch_size => batch_size, :timeout => timeout,
+                                :transformer => transformer)
       if block_given?
         yield cursor
         cursor.close
@@ -199,9 +198,8 @@ module Mongo
              else
                raise TypeError, "spec_or_object_id must be an instance of ObjectId or Hash, or nil"
              end
-      fields = opts.fetch(:fields, opts.fetch('fields', {}))
       begin
-        find_one_document(spec, fields)
+        find_one_document(spec, opts)
       rescue => ex
         raise OperationFailure, ex.message
       end
@@ -344,18 +342,21 @@ module Mongo
     #
     # @core indexes create_index-instance_method
     def create_index(spec, opts={})
-      _create_indexes(spec,opts)
+      _create_indexes(spec, opts)
     end
     alias_method :ensure_index, :create_index
 
     # Drop a specified index.
     #
-    # @param [String] name
+    # @param [String, Array] spec
+    #   should be either a single field name or an array of
+    #   [field name, direction] pairs. Directions should be specified
+    #   as Mongo::ASCENDING, Mongo::DESCENDING, or Mongo::GEO2D.
     #
     # @core indexes
-    def drop_index(name)
+    def drop_index(spec)
       raise MongoArgumentError, "Cannot drop index for nil name" unless name
-      _drop_index(name)
+      _drop_index(spec)
     end
 
     # Drop all indexes.
@@ -486,61 +487,30 @@ module Mongo
     #
     # @return [Array] the command response consisting of grouped items.
     def group(opts, condition={}, initial={}, reduce=nil, finalize=nil)
+      key = keyf = false
       if opts.is_a?(Hash)
-        return __group(opts)
+        reduce, finalize, initial= opts.values_at(:reduce, :finalize, :initial)
+        key, keyf = opts.values_at(:key, :keyf)
+        condition = opts.fetch(:cond, {})
+        unless key.nil? && keyf.nil?
+          unless key.is_a?(Array) || keyf.is_a?(String) || keyf.is_a?(BSON::Code)
+            raise MongoArgumentError, "Group takes either an array of fields to group by or a JavaScript function" +
+              "in the form of a String or BSON::Code."
+          end
+        end
       else
         warn "Collection#group no longer take a list of parameters. This usage is deprecated and will be remove in v2.0." +
              "Check out the new API at http://api.mongodb.org/ruby/current/Mongo/Collection.html#group-instance_method"
-      end
-
-      reduce = BSON::Code.new(reduce) unless reduce.is_a?(BSON::Code)
-
-      group_command = {
-        "group" => {
-          "ns"      => @name,
-          "$reduce" => reduce,
-          "cond"    => condition,
-          "initial" => initial
-        }
-      }
-
-      if opts.is_a?(Symbol)
-        raise MongoArgumentError, "Group takes either an array of fields to group by or a JavaScript function" +
-          "in the form of a String or BSON::Code."
-      end
-
-      unless opts.nil?
-        if opts.is_a? Array
-          key_type = "key"
-          key_value = {}
-          opts.each { |k| key_value[k] = 1 }
+        case opts
+        when Array
+          key = opts
+        when String, BSON::Code
+          keyf = opts
         else
-          key_type  = "$keyf"
-          key_value = opts.is_a?(BSON::Code) ? opts : BSON::Code.new(opts)
+          raise MongoArgumentError, "Group takes either an array of fields to group by or a JavaScript function" +
+          "in the form of a String or BSON::Code."
         end
-
-        group_command["group"][key_type] = key_value
       end
-
-      finalize = BSON::Code.new(finalize) if finalize.is_a?(String)
-      if finalize.is_a?(BSON::Code)
-        group_command['group']['finalize'] = finalize
-      end
-
-      result = @db.command(group_command)
-
-      if Mongo::Support.ok?(result)
-        result["retval"]
-      else
-        raise OperationFailure, "group command failed: #{result['errmsg']}"
-      end
-    end
-
-    def __group(opts={})
-      reduce   =  opts[:reduce]
-      finalize =  opts[:finalize]
-      cond     =  opts.fetch(:cond, {})
-      initial  =  opts[:initial]
 
       if !(reduce && initial)
         raise MongoArgumentError, "Group requires at minimum values for initial and reduce."
@@ -550,31 +520,28 @@ module Mongo
         "group" => {
           "ns"      => @name,
           "$reduce" => reduce.to_bson_code,
-          "cond"    => cond,
+          "cond"    => condition,
           "initial" => initial
         }
       }
+
+      if keyf
+        cmd["group"]["$keyf"] = keyf.to_bson_code
+      elsif key
+        key_hash = Hash[key.zip( [1]*key.size )]
+        cmd["group"]["key"] = key_hash
+      end
 
       if finalize
         cmd['group']['finalize'] = finalize.to_bson_code
       end
 
-      if key = opts[:key]
-        if key.is_a?(String) || key.is_a?(Symbol)
-          key = [key]
-        end
-        key_value = {}
-        key.each { |k| key_value[k] = 1 }
-        cmd["group"]["key"] = key_value
-      elsif keyf = opts[:keyf]
-        cmd["group"]["$keyf"] = keyf.to_bson_code
-      end
+      result = from_dbobject(@db.command(cmd))
 
-      result = @db.command(cmd)
-      result["retval"]
+      return result["retval"] if Mongo.result_ok?(result)
+
+      raise OperationFailure, "group command failed: #{result['errmsg']}"
     end
-
-    private :__group
 
     # Return a list of distinct values for +key+ across all
     # documents in the collection. The key may use dot notation

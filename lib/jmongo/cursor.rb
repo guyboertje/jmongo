@@ -30,7 +30,7 @@ module Mongo
       @fields     = convert_fields_for_query(options[:fields])
       @admin      = options.fetch(:admin, false)
       @order      = nil
-      @batch_size = Mongo::Constants::DEFAULT_BATCH_SIZE
+      @batch_size = Mongo::DEFAULT_BATCH_SIZE
       @skip       = 0
       @limit      = 0
       _skip options[:skip]
@@ -100,15 +100,15 @@ module Mongo
     end
 
     def next_document
-      _xform(has_next? ? __next : BSON::OrderedHash.new)
+      _xform(has_next? ? __next : nil)
     end
     alias :next :next_document
 
     def _xform(doc)
-      if @transformer.nil?
-        doc
+      if @transformer && @transformer.respond_to?('call')
+        @transformer.call(doc)
       else
-        @transformer.call(doc) if doc
+        doc
       end
     end
     private :_xform
@@ -128,8 +128,8 @@ module Mongo
     def _batch_size(size=nil)
       return if size.nil?
       check_modifiable
-      raise ArgumentError, "Invalid value for batch_size #{size}; must be 0 or > 1." if size < 0 || size == 1
-      @batch_size = @limit != 0 && size > @limit ? @limit : size
+      raise ArgumentError, "batch_size requires an integer" unless size.is_a? Integer
+      @batch_size = size
     end
     private :_batch_size
 
@@ -236,17 +236,7 @@ module Mongo
     # of fields names to a hash, with the field names for keys and '1' for each
     # value.
     def convert_fields_for_query(fields)
-      case fields
-      when String, Symbol
-        to_dbobject({fields => 1})
-      when Array
-        return nil if fields.length.zero?
-        hash = {}
-        fields.each { |field| hash[field] = 1 }
-        to_dbobject hash
-      when Hash
-        to_dbobject fields
-      end
+      to_dbobject prep_fields(fields)
     end
 
     # Set the query selector hash.
