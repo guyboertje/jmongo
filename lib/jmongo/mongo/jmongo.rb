@@ -1,21 +1,21 @@
 module JMongo
-  import com.mongodb.BasicDBList
-  import com.mongodb.BasicDBObject
-  import com.mongodb.Bytes
-  import com.mongodb.DB
-  import com.mongodb.DBRef
-  import com.mongodb.DBCollection
-  import com.mongodb.DBCursor
-  import com.mongodb.DBObject
-  import com.mongodb.Mongo
-  import com.mongodb.MongoOptions
-  import com.mongodb.ServerAddress
-  import com.mongodb.WriteConcern
-  import com.mongodb.WriteResult
-  import com.mongodb.MongoException
-  import com.mongodb.MongoURI
-  import com.mongodb.MapReduceCommand
-  import com.mongodb.MapReduceOutput
+  java_import com.mongodb.BasicDBList
+  java_import com.mongodb.BasicDBObject
+  java_import com.mongodb.Bytes
+  java_import com.mongodb.DB
+  java_import com.mongodb.DBRef
+  java_import com.mongodb.DBCollection
+  java_import com.mongodb.DBCursor
+  java_import com.mongodb.DBObject
+  java_import com.mongodb.Mongo
+  java_import com.mongodb.MongoOptions
+  java_import com.mongodb.ServerAddress
+  java_import com.mongodb.WriteConcern
+  java_import com.mongodb.WriteResult
+  java_import com.mongodb.MongoException
+  java_import com.mongodb.MongoURI
+  java_import com.mongodb.MapReduceCommand
+  java_import com.mongodb.MapReduceOutput
 end
 
 class Java::ComMongodb::BasicDBObject
