@@ -20,10 +20,10 @@ module Mongo
     include Mongo::JavaImpl::Connection_::InstanceMethods
      extend Mongo::JavaImpl::Connection_::ClassMethods
 
-    attr_reader :connection, :connector, :logger, :auths
+    attr_reader :connection, :connector, :logger, :auths, :primary
 
     DEFAULT_PORT = 27017
-    
+
     def initialize host = nil, port = nil, opts = {}
       if opts.has_key?(:new_from_uri)
         @options = opts
@@ -42,6 +42,8 @@ module Mongo
       @connector = @connection.connector
       @logger = opts[:logger]
       @auths = opts.fetch(:auths, [])
+      add = @connector.address
+      @primary = [add.host, add.port]
     end
 
     def self.paired(nodes, opts={})
@@ -180,8 +182,8 @@ module Mongo
     def get_request_id
       raise_not_implemented
     end
-  
-    # Checks if a server is alive. This command will return immediately 
+
+    # Checks if a server is alive. This command will return immediately
     # even if the server is in a lock.
     #
     # @return [Hash]
