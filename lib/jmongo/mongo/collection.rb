@@ -101,7 +101,7 @@ module Mongo
             @j_collection.insert( to_dbobject(to_do), concern )
           rescue => ex
             if ex.message =~ /E11000/
-              msg = "Failed to insert document #{obj.inspect}, duplicate key"
+              msg = "Failed to insert document #{obj.inspect}, duplicate key, E11000"
               raise(Mongo::OperationFailure, msg)
             else
               msg = "Failed to insert document #{obj.inspect} db error: #{ex.message}"
