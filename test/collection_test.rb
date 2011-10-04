@@ -1,43 +1,30 @@
 require './test/test_helper'
 
-CONNECTION ||= Mongo::Connection.new(TEST_HOST, TEST_PORT, :op_timeout => 10)
-$db   = CONNECTION.db(MONGO_TEST_DB)
-
-VERSION = CONNECTION.server_version
-apr VERSION
-
-def clear_collections
-  $db.collection_names.each do |n|
-    $db.drop_collection(n) unless n =~ /system/
-  end
-end
-
-clear_collections
-
-$test = $db.collection("test")
+Cfg.connection :op_timeout => 10
+Cfg.db
 
 class TestCollection < MiniTest::Unit::TestCase
 
   def setup
-    clear_collections
+    Cfg.clear_all
   end
 
   def test_capped_method
-    $db.drop_collection('normal')
+    Cfg.db.drop_collection('normal')
 
-    $db.create_collection('normal')
-    assert !$db['normal'].capped?
-    $db.drop_collection('normal')
+    Cfg.db.create_collection('normal')
+    assert !Cfg.db['normal'].capped?
+    Cfg.db.drop_collection('normal')
 
-    $db.create_collection('c', :capped => true, :size => 100_000)
-    assert $db['c'].capped?
-    $db.drop_collection('c')
+    Cfg.db.create_collection('c', :capped => true, :size => 100_000)
+    assert Cfg.db['c'].capped?
+    Cfg.db.drop_collection('c')
   end
 
   def test_optional_pk_factory
-    @coll_default_pk = $db.collection('stuff')
+    @coll_default_pk = Cfg.db.collection('stuff')
     assert_equal BSON::ObjectId, @coll_default_pk.pk_factory
-    @coll_default_pk = $db.create_collection('more-stuff')
+    @coll_default_pk = Cfg.db.create_collection('more-stuff')
     assert_equal BSON::ObjectId, @coll_default_pk.pk_factory
 
     # Create a db with a pk_factory.
@@ -56,42 +43,42 @@ class TestCollection < MiniTest::Unit::TestCase
   end
 
   def test_pk_factory_on_collection
-    @coll2 = Collection.new('foo', $db, :pk => TestPK)
+    @coll2 = Collection.new('foo', Cfg.db, :pk => TestPK)
     assert_equal TestPK, @coll2.pk_factory
   end
 
   def test_valid_names
     assert_raises Mongo::InvalidNSName do
-      $db["te$t"]
+      Cfg.db["te$t"]
     end
 
     assert_raises Mongo::InvalidNSName do
-      $db['$main']
+      Cfg.db['$main']
     end
 
-    assert $db['$cmd']
-    assert $db['oplog.$main']
+    assert Cfg.db['$cmd']
+    assert Cfg.db['oplog.$main']
   end
 
   def test_collection
-    assert_kind_of Collection, $db["test"]
-    assert_equal $db["test"].name(), $db.collection("test").name()
-    assert_equal $db["test"].name(), $db[:test].name()
+    assert_kind_of Collection, Cfg.db["test"]
+    assert_equal Cfg.db["test"].name(), Cfg.db.collection("test").name()
+    assert_equal Cfg.db["test"].name(), Cfg.db[:test].name()
 
-    assert_kind_of Collection, $db["test"]["foo"]
-    assert_equal $db["test"]["foo"].name(), $db.collection("test.foo").name()
-    assert_equal $db["test"]["foo"].name(), $db["test.foo"].name()
+    assert_kind_of Collection, Cfg.db["test"]["foo"]
+    assert_equal Cfg.db["test"]["foo"].name(), Cfg.db.collection("test.foo").name()
+    assert_equal Cfg.db["test"]["foo"].name(), Cfg.db["test.foo"].name()
 
-    $db["test"]["foo"].remove
-    $db["test"]["foo"].insert("x" => 5)
-    assert_equal 5, $db.collection("test.foo").find_one()["x"]
+    Cfg.db["test"]["foo"].remove
+    Cfg.db["test"]["foo"].insert("x" => 5)
+    assert_equal 5, Cfg.db.collection("test.foo").find_one()["x"]
   end
 
   def test_rename_collection
-    $db.drop_collection('foo1')
-    $db.drop_collection('bar1')
+    Cfg.db.drop_collection('foo1')
+    Cfg.db.drop_collection('bar1')
 
-    @col = $db.create_collection('foo1')
+    @col = Cfg.db.create_collection('foo1')
     assert_equal 'foo1', @col.name
 
     @col.rename('bar1')
@@ -100,30 +87,30 @@ class TestCollection < MiniTest::Unit::TestCase
 
   def test_nil_id
     skip("The Java driver does not allow nil _id")
-    assert_equal 5, $test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
-    assert_equal 5, $test.save({"_id" => 5, "foo" => "baz"}, {:safe => true})
-    assert_equal nil, $test.find_one("foo" => "bar")
-    assert_equal "baz", $test.find_one(:_id => 5)["foo"]
+    assert_equal 5, Cfg.test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
+    assert_equal 5, Cfg.test.save({"_id" => 5, "foo" => "baz"}, {:safe => true})
+    assert_equal nil, Cfg.test.find_one("foo" => "bar")
+    assert_equal "baz", Cfg.test.find_one(:_id => 5)["foo"]
     assert_raises OperationFailure do
-      $test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
+      Cfg.test.insert({"_id" => 5, "foo" => "bar"}, {:safe => true})
     end
 
-    assert_equal nil, $test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
-    assert_equal nil, $test.save({"_id" => nil, "foo" => "baz"}, {:safe => true})
-    assert_equal nil, $test.find_one("foo" => "bar")
-    assert_equal "baz", $test.find_one(:_id => nil)["foo"]
+    assert_equal nil, Cfg.test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
+    assert_equal nil, Cfg.test.save({"_id" => nil, "foo" => "baz"}, {:safe => true})
+    assert_equal nil, Cfg.test.find_one("foo" => "bar")
+    assert_equal "baz", Cfg.test.find_one(:_id => nil)["foo"]
     assert_raises OperationFailure do
-      $test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
+      Cfg.test.insert({"_id" => nil, "foo" => "bar"}, {:safe => true})
     end
     assert_raises OperationFailure do
-      $test.insert({:_id => nil, "foo" => "bar"}, {:safe => true})
+      Cfg.test.insert({:_id => nil, "foo" => "bar"}, {:safe => true})
     end
   end
 
-  if VERSION > "1.1"
+  if Cfg.version > "1.1"
     def setup_for_distinct
-      $test.remove
-      $test.insert([{:a => 0, :b => {:c => "a"}},
+      Cfg.test.remove
+      Cfg.test.insert([{:a => 0, :b => {:c => "a"}},
                      {:a => 1, :b => {:c => "b"}},
                      {:a => 1, :b => {:c => "c"}},
                      {:a => 2, :b => {:c => "a"}},
@@ -133,48 +120,48 @@ class TestCollection < MiniTest::Unit::TestCase
 
     def test_distinct_queries
       setup_for_distinct
-      assert_equal [0, 1, 2, 3], $test.distinct(:a).sort
-      assert_equal ["a", "b", "c"], $test.distinct("b.c").sort
+      assert_equal [0, 1, 2, 3], Cfg.test.distinct(:a).sort
+      assert_equal ["a", "b", "c"], Cfg.test.distinct("b.c").sort
     end
 
-    if VERSION >= "1.2"
+    if Cfg.version >= "1.2"
       def test_filter_collection_with_query
         setup_for_distinct
-        assert_equal [2, 3], $test.distinct(:a, {:a => {"$gt" => 1}}).sort
+        assert_equal [2, 3], Cfg.test.distinct(:a, {:a => {"$gt" => 1}}).sort
       end
 
       def test_filter_nested_objects
         setup_for_distinct
-        assert_equal ["a", "b"], $test.distinct("b.c", {"b.c" => {"$ne" => "c"}}).sort
+        assert_equal ["a", "b"], Cfg.test.distinct("b.c", {"b.c" => {"$ne" => "c"}}).sort
       end
     end
   end
 
   def test_safe_insert
-    $test.create_index("hello", :unique => true)
+    Cfg.test.create_index("hello", :unique => true)
     a = {"hello" => "world"}
-    $test.insert(a)
-    $test.insert(a)
-    assert($db.get_last_error['err'].include?("11000"))
+    Cfg.test.insert(a)
+    Cfg.test.insert(a)
+    assert(Cfg.db.get_last_error['err'].include?("11000"))
 
     assert_raises OperationFailure do
-      $test.insert(a, :safe => true)
+      Cfg.test.insert(a, :safe => true)
     end
   end
 
   def test_bulk_insert_with_continue_on_error
-    if VERSION >= "2.0"
-      $test.create_index([["foo", 1]], :unique => true)
+    if Cfg.version >= "2.0"
+      Cfg.test.create_index([["foo", 1]], :unique => true)
       docs = []
       docs << {:foo => 1}
       docs << {:foo => 1}
       docs << {:foo => 2}
       docs << {:foo => 3}
       assert_raises OperationFailure do
-        $test.insert(docs, :safe => true)
+        Cfg.test.insert(docs, :safe => true)
       end
-      assert_equal 1, $test.count
-      $test.remove
+      assert_equal 1, Cfg.test.count
+      Cfg.test.remove
 
       docs = []
       docs << {:foo => 1}
@@ -183,12 +170,12 @@ class TestCollection < MiniTest::Unit::TestCase
       docs << {:foo => 3}
       docs << {:foo => 3}
       assert_raises OperationFailure do
-        $test.insert(docs, :safe => true, :continue_on_error => true)
+        Cfg.test.insert(docs, :safe => true, :continue_on_error => true)
       end
-      assert_equal 3, $test.count
+      assert_equal 3, Cfg.test.count
 
-      $test.remove
-      $test.drop_index("foo_1")
+      Cfg.test.remove
+      Cfg.test.drop_index("foo_1")
     end
   end
 
@@ -200,70 +187,70 @@ class TestCollection < MiniTest::Unit::TestCase
     end
 
     assert_raises InvalidOperation do
-      $test.insert(docs)
+      Cfg.test.insert(docs)
     end
   end
 
   def test_update
-    id1 = $test.save("x" => 5)
-    $test.update({}, {"$inc" => {"x" => 1}})
-    assert_equal 1, $test.count()
-    assert_equal 6, $test.find_one(:_id => id1)["x"]
+    id1 = Cfg.test.save("x" => 5)
+    Cfg.test.update({}, {"$inc" => {"x" => 1}})
+    assert_equal 1, Cfg.test.count()
+    assert_equal 6, Cfg.test.find_one(:_id => id1)["x"]
 
-    id2 = $test.save("x" => 1)
-    $test.update({"x" => 6}, {"$inc" => {"x" => 1}})
-    assert_equal 7, $test.find_one(:_id => id1)["x"]
-    assert_equal 1, $test.find_one(:_id => id2)["x"]
+    id2 = Cfg.test.save("x" => 1)
+    Cfg.test.update({"x" => 6}, {"$inc" => {"x" => 1}})
+    assert_equal 7, Cfg.test.find_one(:_id => id1)["x"]
+    assert_equal 1, Cfg.test.find_one(:_id => id2)["x"]
   end
 
   def test_multi_update
-    $test.save("num" => 10)
-    $test.save("num" => 10)
-    $test.save("num" => 10)
-    assert_equal 3, $test.count
+    Cfg.test.save("num" => 10)
+    Cfg.test.save("num" => 10)
+    Cfg.test.save("num" => 10)
+    assert_equal 3, Cfg.test.count
 
-    $test.update({"num" => 10}, {"$set" => {"num" => 100}}, :multi => true)
-    $test.find.each do |doc|
+    Cfg.test.update({"num" => 10}, {"$set" => {"num" => 100}}, :multi => true)
+    Cfg.test.find.each do |doc|
       assert_equal 100, doc["num"]
     end
   end
 
   def test_upsert
-    $test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
-    $test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
+    Cfg.test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
+    Cfg.test.update({"page" => "/"}, {"$inc" => {"count" => 1}}, :upsert => true)
 
-    assert_equal 1, $test.count()
-    assert_equal 2, $test.find_one()["count"]
+    assert_equal 1, Cfg.test.count()
+    assert_equal 2, Cfg.test.find_one()["count"]
   end
 
   def test_safe_update
-    $test.create_index("x", :unique => true)
-    $test.insert("x" => 5)
-    $test.insert("x" => 10)
+    Cfg.test.create_index("x", :unique => true)
+    Cfg.test.insert("x" => 5)
+    Cfg.test.insert("x" => 10)
 
     # Can update an indexed collection.
-    $test.update({}, {"$inc" => {"x" => 1}})
-    assert !$db.error?
+    Cfg.test.update({}, {"$inc" => {"x" => 1}})
+    assert !Cfg.db.error?
 
     # Can't duplicate an index.
     assert_raises OperationFailure do
-      $test.update({}, {"x" => 10}, :safe => true)
+      Cfg.test.update({}, {"x" => 10}, :safe => true)
     end
   end
 
   def test_safe_save
-    $test.create_index("hello", :unique => true)
+    Cfg.test.create_index("hello", :unique => true)
 
-    $test.save("hello" => "world")
-    $test.save("hello" => "world")
+    Cfg.test.save("hello" => "world")
+    Cfg.test.save("hello" => "world")
 
     assert_raises OperationFailure do
-      $test.save({"hello" => "world"}, :safe => true)
+      Cfg.test.save({"hello" => "world"}, :safe => true)
     end
   end
 
   def test_safe_remove
-    @conn = standard_connection
+    @conn = Cfg.new_connection
     @db   = @conn[MONGO_TEST_DB]
     @test = @db['test-safe-remove']
     @test.save({:a => 50})
@@ -272,111 +259,111 @@ class TestCollection < MiniTest::Unit::TestCase
   end
 
   def test_remove_return_value
-    assert_equal true, $test.remove({})
+    assert_equal true, Cfg.test.remove({})
   end
 
   def test_count
 
-    assert_equal 0, $test.count
-    $test.save(:x => 1)
-    $test.save(:x => 2)
-    assert_equal 2, $test.count
+    assert_equal 0, Cfg.test.count
+    Cfg.test.save(:x => 1)
+    Cfg.test.save(:x => 2)
+    assert_equal 2, Cfg.test.count
 
-    assert_equal 1, $test.count(:query => {:x => 1})
-    assert_equal 1, $test.count(:limit => 1)
-    assert_equal 0, $test.count(:skip => 2)
+    assert_equal 1, Cfg.test.count(:query => {:x => 1})
+    assert_equal 1, Cfg.test.count(:limit => 1)
+    assert_equal 0, Cfg.test.count(:skip => 2)
   end
 
   # Note: #size is just an alias for #count.
   def test_size
-    assert_equal 0, $test.count
-    assert_equal $test.size, $test.count
-    $test.save("x" => 1)
-    $test.save("x" => 2)
-    assert_equal $test.size, $test.count
+    assert_equal 0, Cfg.test.count
+    assert_equal Cfg.test.size, Cfg.test.count
+    Cfg.test.save("x" => 1)
+    Cfg.test.save("x" => 2)
+    assert_equal Cfg.test.size, Cfg.test.count
   end
 
   def test_no_timeout_option
 
     assert_raises ArgumentError, "Timeout can be set to false only when #find is invoked with a block." do
-      $test.find({}, :timeout => false)
+      Cfg.test.find({}, :timeout => false)
     end
 
-    $test.find({}, :timeout => false) do |cursor|
+    Cfg.test.find({}, :timeout => false) do |cursor|
       assert_equal 0, cursor.count
     end
 
-    $test.save("x" => 1)
-    $test.save("x" => 2)
-    $test.find({}, :timeout => false) do |cursor|
+    Cfg.test.save("x" => 1)
+    Cfg.test.save("x" => 2)
+    Cfg.test.find({}, :timeout => false) do |cursor|
       assert_equal 2, cursor.count
     end
   end
 
   def test_default_timeout
-    cursor = $test.find
+    cursor = Cfg.test.find
     assert_equal true, cursor.timeout
   end
 
   def test_fields_as_hash
-    $test.save(:a => 1, :b => 1, :c => 1)
+    Cfg.test.save(:a => 1, :b => 1, :c => 1)
 
-    doc = $test.find_one({:a => 1}, :fields => {:b => 0})
+    doc = Cfg.test.find_one({:a => 1}, :fields => {:b => 0})
     assert_nil doc['b']
     assert doc['a']
     assert doc['c']
 
-    doc = $test.find_one({:a => 1}, :fields => {:a => 1, :b => 1})
+    doc = Cfg.test.find_one({:a => 1}, :fields => {:a => 1, :b => 1})
     assert_nil doc['c']
     assert doc['a']
     assert doc['b']
 
 
     assert_raises Mongo::OperationFailure do
-      $test.find_one({:a => 1}, :fields => {:a => 1, :b => 0})
+      Cfg.test.find_one({:a => 1}, :fields => {:a => 1, :b => 0})
     end
   end
 
-  if VERSION >= "1.5.1"
+  if Cfg.version >= "1.5.1"
     def test_fields_with_slice
-      $test.save({:foo => [1, 2, 3, 4, 5, 6], :test => 'slice'})
+      Cfg.test.save({:foo => [1, 2, 3, 4, 5, 6], :test => 'slice'})
 
-      doc = $test.find_one({:test => 'slice'}, :fields => {'foo' => {'$slice' => [0, 3]}})
+      doc = Cfg.test.find_one({:test => 'slice'}, :fields => {'foo' => {'$slice' => [0, 3]}})
       assert_equal [1, 2, 3], doc['foo']
-      $test.remove
+      Cfg.test.remove
     end
   end
 
   def test_find_one
-    id = $test.save("hello" => "world", "foo" => "bar")
+    id = Cfg.test.save("hello" => "world", "foo" => "bar")
 
-    assert_equal "world", $test.find_one()["hello"]
-    assert_equal $test.find_one(id), $test.find_one()
-    assert_equal $test.find_one(nil), $test.find_one()
-    assert_equal $test.find_one({}), $test.find_one()
-    assert_equal $test.find_one("hello" => "world"), $test.find_one()
-    assert_equal $test.find_one(BSON::OrderedHash["hello", "world"]), $test.find_one()
+    assert_equal "world", Cfg.test.find_one()["hello"]
+    assert_equal Cfg.test.find_one(id), Cfg.test.find_one()
+    assert_equal Cfg.test.find_one(nil), Cfg.test.find_one()
+    assert_equal Cfg.test.find_one({}), Cfg.test.find_one()
+    assert_equal Cfg.test.find_one("hello" => "world"), Cfg.test.find_one()
+    assert_equal Cfg.test.find_one(BSON::OrderedHash["hello", "world"]), Cfg.test.find_one()
 
-    assert $test.find_one(nil, :fields => ["hello"]).include?("hello")
-    assert !$test.find_one(nil, :fields => ["foo"]).include?("hello")
-    assert_equal ["_id"], $test.find_one(nil, :fields => []).keys()
+    assert Cfg.test.find_one(nil, :fields => ["hello"]).include?("hello")
+    assert !Cfg.test.find_one(nil, :fields => ["foo"]).include?("hello")
+    assert_equal ["_id"], Cfg.test.find_one(nil, :fields => []).keys()
 
-    assert_equal nil, $test.find_one("hello" => "foo")
-    assert_equal nil, $test.find_one(BSON::OrderedHash["hello", "foo"])
-    assert_equal nil, $test.find_one(ObjectId.new)
+    assert_equal nil, Cfg.test.find_one("hello" => "foo")
+    assert_equal nil, Cfg.test.find_one(BSON::OrderedHash["hello", "foo"])
+    assert_equal nil, Cfg.test.find_one(ObjectId.new)
 
     assert_raises TypeError do
-      $test.find_one(6)
+      Cfg.test.find_one(6)
     end
   end
 
   def test_insert_adds_id
     doc = {"hello" => "world"}
-    $test.insert(doc)
+    Cfg.test.insert(doc)
     assert(doc.include?(:_id))
 
     docs = [{"hello" => "world"}, {"hello" => "world"}]
-    $test.insert(docs)
+    Cfg.test.insert(docs)
     docs.each do |d|
       assert(d.include?(:_id))
     end
@@ -384,23 +371,23 @@ class TestCollection < MiniTest::Unit::TestCase
 
   def test_save_adds_id
     doc = {"hello" => "world"}
-    $test.save(doc)
+    Cfg.test.save(doc)
     assert(doc.include?(:_id))
   end
 
   def test_optional_find_block
     10.times do |i|
-      $test.save("i" => i)
+      Cfg.test.save("i" => i)
     end
 
     x = nil
-    $test.find("i" => 2) { |cursor|
+    Cfg.test.find("i" => 2) { |cursor|
       x = cursor.count()
     }
     assert_equal 1, x
 
     i = 0
-    $test.find({}, :skip => 5) do |cursor|
+    Cfg.test.find({}, :skip => 5) do |cursor|
       cursor.each do |doc|
         i = i + 1
       end
@@ -408,173 +395,173 @@ class TestCollection < MiniTest::Unit::TestCase
     assert_equal 5, i
 
     c = nil
-    $test.find() do |cursor|
+    Cfg.test.find() do |cursor|
       c = cursor
     end
     assert c.closed?
   end
 
   def test_map_reduce
-    $test << { "user_id" => 1 }
-    $test << { "user_id" => 2 }
+    Cfg.test << { "user_id" => 1 }
+    Cfg.test << { "user_id" => 2 }
     m = "function() { emit(this.user_id, 1); }"
     r = "function(k,vals) { return 1; }"
-    res = $test.map_reduce(m, r, :out => 'foo');
+    res = Cfg.test.map_reduce(m, r, :out => 'foo');
     assert res.find_one({"_id" => 1})
     assert res.find_one({"_id" => 2})
   end
 
   def test_map_reduce_with_code_objects
-    $test << { "user_id" => 1 }
-    $test << { "user_id" => 2 }
+    Cfg.test << { "user_id" => 1 }
+    Cfg.test << { "user_id" => 2 }
     m = Code.new("function() { emit(this.user_id, 1); }")
     r = Code.new("function(k,vals) { return 1; }")
-    res = $test.map_reduce(m, r, :out => 'foo');
+    res = Cfg.test.map_reduce(m, r, :out => 'foo');
     assert res.find_one({"_id" => 1})
     assert res.find_one({"_id" => 2})
   end
 
   def test_map_reduce_with_options
-    $test << { "user_id" => 1 }
-    $test << { "user_id" => 2 }
-    $test << { "user_id" => 3 }
+    Cfg.test << { "user_id" => 1 }
+    Cfg.test << { "user_id" => 2 }
+    Cfg.test << { "user_id" => 3 }
     m = Code.new("function() { emit(this.user_id, 1); }")
     r = Code.new("function(k,vals) { return 1; }")
-    res = $test.map_reduce(m, r, :query => {"user_id" => {"$gt" => 1}}, :out => 'foo');
+    res = Cfg.test.map_reduce(m, r, :query => {"user_id" => {"$gt" => 1}}, :out => 'foo');
     assert_equal 2, res.count
     assert res.find_one({"_id" => 2})
     assert res.find_one({"_id" => 3})
   end
 
   def test_map_reduce_with_raw_response
-    $test << { "user_id" => 1 }
-    $test << { "user_id" => 2 }
-    $test << { "user_id" => 3 }
+    Cfg.test << { "user_id" => 1 }
+    Cfg.test << { "user_id" => 2 }
+    Cfg.test << { "user_id" => 3 }
     m = Code.new("function() { emit(this.user_id, 1); }")
     r = Code.new("function(k,vals) { return 1; }")
-    res = $test.map_reduce(m, r, :raw => true, :out => 'foo')
+    res = Cfg.test.map_reduce(m, r, :raw => true, :out => 'foo')
     assert res["result"]
     assert res["counts"]
     assert res["timeMillis"]
   end
 
   def test_map_reduce_with_output_collection
-    $test << { "user_id" => 1 }
-    $test << { "user_id" => 2 }
-    $test << { "user_id" => 3 }
+    Cfg.test << { "user_id" => 1 }
+    Cfg.test << { "user_id" => 2 }
+    Cfg.test << { "user_id" => 3 }
     output_collection = "test-map-coll"
     m = Code.new("function() { emit(this.user_id, 1); }")
     r = Code.new("function(k,vals) { return 1; }")
-    res = $test.map_reduce(m, r, :raw => true, :out => output_collection)
+    res = Cfg.test.map_reduce(m, r, :raw => true, :out => output_collection)
     assert_equal output_collection, res["result"]
     assert res["counts"]
     assert res["timeMillis"]
   end
 
-  if VERSION >= "1.8.0"
+  if Cfg.version >= "1.8.0"
     def test_map_reduce_with_collection_merge
-      $test << {:user_id => 1}
-      $test << {:user_id => 2}
+      Cfg.test << {:user_id => 1}
+      Cfg.test << {:user_id => 2}
       output_collection = "test-map-coll"
       m = Code.new("function() { emit(this.user_id, {count: 1}); }")
       r = Code.new("function(k,vals) { var sum = 0;" +
         " vals.forEach(function(v) { sum += v.count;} ); return {count: sum}; }")
-      res = $test.map_reduce(m, r, :out => output_collection)
+      res = Cfg.test.map_reduce(m, r, :out => output_collection)
 
-      $test.remove
-      $test << {:user_id => 3}
-      res = $test.map_reduce(m, r, :out => {:merge => output_collection})
+      Cfg.test.remove
+      Cfg.test << {:user_id => 3}
+      res = Cfg.test.map_reduce(m, r, :out => {:merge => output_collection})
       assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 1}
 
-      $test.remove
-      $test << {:user_id => 3}
-      res = $test.map_reduce(m, r, :out => {:reduce => output_collection})
+      Cfg.test.remove
+      Cfg.test << {:user_id => 3}
+      res = Cfg.test.map_reduce(m, r, :out => {:reduce => output_collection})
       assert res.find.to_a.any? {|doc| doc["_id"] == 3 && doc["value"]["count"] == 2}
 
       assert_raises ArgumentError do
-        $test.map_reduce(m, r, :out => {:inline => 1})
+        Cfg.test.map_reduce(m, r, :out => {:inline => 1})
       end
 
-      $test.map_reduce(m, r, :raw => true, :out => {:inline => 1})
+      Cfg.test.map_reduce(m, r, :raw => true, :out => {:inline => 1})
       assert res["results"]
     end
   end
 
-  if VERSION > "1.3.0"
+  if Cfg.version > "1.3.0"
     def test_find_and_modify
-      $test << { :a => 1, :processed => false }
-      $test << { :a => 2, :processed => false }
-      $test << { :a => 3, :processed => false }
+      Cfg.test << { :a => 1, :processed => false }
+      Cfg.test << { :a => 2, :processed => false }
+      Cfg.test << { :a => 3, :processed => false }
 
-      $test.find_and_modify(:query => {}, :sort => [['a', -1]], :update => {"$set" => {:processed => true}})
+      Cfg.test.find_and_modify(:query => {}, :sort => [['a', -1]], :update => {"$set" => {:processed => true}})
 
-      assert $test.find_one({:a => 3})['processed']
+      assert Cfg.test.find_one({:a => 3})['processed']
     end
 
     def test_find_and_modify_with_invalid_options
-      $test << { :a => 1, :processed => false }
-      $test << { :a => 2, :processed => false }
-      $test << { :a => 3, :processed => false }
+      Cfg.test << { :a => 1, :processed => false }
+      Cfg.test << { :a => 2, :processed => false }
+      Cfg.test << { :a => 3, :processed => false }
 
       assert_raises Mongo::OperationFailure do
-        $test.find_and_modify(:blimey => {})
+        Cfg.test.find_and_modify(:blimey => {})
       end
     end
   end
 
-  if VERSION >= "1.3.5"
+  if Cfg.version >= "1.3.5"
     def test_coll_stats
-      $test << {:n => 1}
-      $test.create_index("n")
-      stats = $test.stats
-      assert_equal "#{MONGO_TEST_$db}.test", stats['ns']
+      Cfg.test << {:n => 1}
+      Cfg.test.create_index("n")
+      stats = Cfg.test.stats
+      assert_equal "#{MONGO_TEST_DB}.test", stats['ns']
     end
   end
 
   def test_saving_dates_pre_epoch
     begin
-      $test.save({'date' => Time.utc(1600)})
-      assert_in_delta Time.utc(1600), $test.find_one()["date"], 2
+      Cfg.test.save({'date' => Time.utc(1600)})
+      assert_in_delta Time.utc(1600), Cfg.test.find_one()["date"], 2
     rescue ArgumentError
       # See note in test_date_before_epoch (BSONTest)
     end
   end
 
   def test_save_symbol_find_string
-    $test.save(:foo => :mike, :foo1 => 'mike')
+    Cfg.test.save(:foo => :mike, :foo1 => 'mike')
 
-    assert_equal :mike, $test.find_one(:foo => :mike)["foo"]
-    assert_equal :mike, $test.find_one("foo" => :mike)["foo"]
-    assert_equal 'mike', $test.find_one("foo" => :mike)["foo1"]
+    assert_equal :mike, Cfg.test.find_one(:foo => :mike)["foo"]
+    assert_equal :mike, Cfg.test.find_one("foo" => :mike)["foo"]
+    assert_equal 'mike', Cfg.test.find_one("foo" => :mike)["foo1"]
 
-    assert_equal :mike, $test.find_one(:foo => "mike")["foo"]
-    assert_equal :mike, $test.find_one("foo" => "mike")["foo"]
+    assert_equal :mike, Cfg.test.find_one(:foo => "mike")["foo"]
+    assert_equal :mike, Cfg.test.find_one("foo" => "mike")["foo"]
   end
 
   def test_limit_and_skip
     10.times do |i|
-      $test.save(:foo => i)
+      Cfg.test.save(:foo => i)
     end
 
-    assert_equal 5, $test.find({}, :skip => 5).next_document()["foo"]
-    assert_equal nil, $test.find({}, :skip => 10).next_document()
+    assert_equal 5, Cfg.test.find({}, :skip => 5).next_document()["foo"]
+    assert_equal nil, Cfg.test.find({}, :skip => 10).next_document()
 
-    assert_equal 5, $test.find({}, :limit => 5).to_a.length
+    assert_equal 5, Cfg.test.find({}, :limit => 5).to_a.length
 
-    assert_equal 3, $test.find({}, :skip => 3, :limit => 5).next_document()["foo"]
-    assert_equal 5, $test.find({}, :skip => 3, :limit => 5).to_a.length
+    assert_equal 3, Cfg.test.find({}, :skip => 3, :limit => 5).next_document()["foo"]
+    assert_equal 5, Cfg.test.find({}, :skip => 3, :limit => 5).to_a.length
   end
 
   def test_large_limit
     2000.times do |i|
-      $test.insert("x" => i, "y" => "mongomongo" * 1000)
+      Cfg.test.insert("x" => i, "y" => "mongomongo" * 1000)
     end
 
-    assert_equal 2000, $test.count
+    assert_equal 2000, Cfg.test.count
 
     i = 0
     y = 0
-    $test.find({}, :limit => 1900).each do |doc|
+    Cfg.test.find({}, :limit => 1900).each do |doc|
       i += 1
       y += doc["x"]
     end
@@ -584,13 +571,13 @@ class TestCollection < MiniTest::Unit::TestCase
   end
 
   def test_small_limit
-    $test.insert("x" => "hello world")
-    $test.insert("x" => "goodbye world")
+    Cfg.test.insert("x" => "hello world")
+    Cfg.test.insert("x" => "goodbye world")
 
-    assert_equal 2, $test.count
+    assert_equal 2, Cfg.test.count
 
     x = 0
-    $test.find({}, :limit => 1).each do |doc|
+    Cfg.test.find({}, :limit => 1).each do |doc|
       x += 1
       assert_equal "hello world", doc["x"]
     end
@@ -601,126 +588,128 @@ class TestCollection < MiniTest::Unit::TestCase
   def test_find_with_transformer
     klass       = Struct.new(:id, :a)
     transformer = Proc.new { |doc| klass.new(doc['_id'], doc['a']) }
-    cursor      = $test.find({}, :transformer => transformer)
+    cursor      = Cfg.test.find({}, :transformer => transformer)
     assert_equal(transformer, cursor.transformer)
   end
 
   def test_find_one_with_transformer
     klass       = Struct.new(:id, :a)
     transformer = Proc.new { |doc| klass.new(doc['_id'], doc['a']) }
-    id          = $test.insert('a' => 1)
-    doc         = $test.find_one(id, :transformer => transformer)
+    id          = Cfg.test.insert('a' => 1)
+    doc         = Cfg.test.find_one(id, :transformer => transformer)
     assert_instance_of(klass, doc)
   end
 
   def test_ensure_index
-    $test.drop_indexes
-    $test.insert("x" => "hello world")
-    assert_equal 1, $test.index_information.keys.count #default index
+    Cfg.test.drop_indexes
+    Cfg.test.insert("x" => "hello world")
+    assert_equal 1, Cfg.test.index_information.keys.count #default index
 
-    $test.ensure_index([["x", Mongo::DESCENDING]], {})
-    assert_equal 2, $test.index_information.keys.count
-    assert $test.index_information.keys.include? "x_-1"
+    Cfg.test.ensure_index([["x", Mongo::DESCENDING]], {})
+    assert_equal 2, Cfg.test.index_information.keys.count
+    assert Cfg.test.index_information.keys.include? "x_-1"
 
-    $test.ensure_index([["x", Mongo::ASCENDING]])
-    assert $test.index_information.keys.include? "x_1"
+    Cfg.test.ensure_index([["x", Mongo::ASCENDING]])
+    assert Cfg.test.index_information.keys.include? "x_1"
 
-    $test.ensure_index([["type", 1], ["date", -1]])
-    assert $test.index_information.keys.include? "type_1_date_-1"
+    Cfg.test.ensure_index([["type", 1], ["date", -1]])
+    assert Cfg.test.index_information.keys.include? "type_1_date_-1"
 
-    $test.drop_index("x_1")
-    assert_equal 3, $test.index_information.keys.count
-    $test.drop_index("x_-1")
-    assert_equal 2, $test.index_information.keys.count
+    Cfg.test.drop_index("x_1")
+    assert_equal 3, Cfg.test.index_information.keys.count
+    Cfg.test.drop_index("x_-1")
+    assert_equal 2, Cfg.test.index_information.keys.count
 
-    $test.ensure_index([["x", Mongo::DESCENDING]], {})
-    assert_equal 3, $test.index_information.keys.count
-    assert $test.index_information.keys.include? "x_-1"
+    Cfg.test.ensure_index([["x", Mongo::DESCENDING]], {})
+    assert_equal 3, Cfg.test.index_information.keys.count
+    assert Cfg.test.index_information.keys.include? "x_-1"
 
     # Make sure that drop_index expires cache properly
-    $test.ensure_index([['a', 1]])
-    assert $test.index_information.keys.include?("a_1")
-    $test.drop_index("a_1")
-    assert !$test.index_information.keys.include?("a_1")
-    $test.ensure_index([['a', 1]])
-    assert $test.index_information.keys.include?("a_1")
-    $test.drop_index("a_1")
+    Cfg.test.ensure_index([['a', 1]])
+    assert Cfg.test.index_information.keys.include?("a_1")
+    Cfg.test.drop_index("a_1")
+    assert !Cfg.test.index_information.keys.include?("a_1")
+    Cfg.test.ensure_index([['a', 1]])
+    assert Cfg.test.index_information.keys.include?("a_1")
+    Cfg.test.drop_index("a_1")
   end
 
 end
 
 require 'minitest/spec'
 
+Cfg.clear_all
+
   describe "Grouping" do
     before do
-      $test.remove
-      $test.save("a" => 1)
-      $test.save("b" => 1)
+      Cfg.test.remove
+      Cfg.test.save("a" => 1)
+      Cfg.test.save("b" => 1)
       @initial = {"count" => 0}
       @reduce_function = "function (obj, prev) { prev.count += inc_value; }"
       @grp_opts = {:initial => @initial, :reduce => BSON::Code.new(@reduce_function, {"inc_value" => 1})}
     end
 
     it "should fail if missing required options" do
-      lambda { $test.group(:initial => {}) }.must_raise Mongo::MongoArgumentError
-      lambda { $test.group(:reduce => "foo") }.must_raise Mongo::MongoArgumentError
+      lambda { Cfg.test.group(:initial => {}) }.must_raise Mongo::MongoArgumentError
+      lambda { Cfg.test.group(:reduce => "foo") }.must_raise Mongo::MongoArgumentError
     end
 
     it "should group results using eval form" do
       @grp_opts[:reduce] = BSON::Code.new(@reduce_function, {"inc_value" => 0.5})
-      $test.group( @grp_opts )[0]["count"].must_equal 1
+      Cfg.test.group( @grp_opts )[0]["count"].must_equal 1
 
       @grp_opts[:reduce] = BSON::Code.new(@reduce_function, {"inc_value" => 1})
-      $test.group( @grp_opts )[0]["count"].must_equal 2
+      Cfg.test.group( @grp_opts )[0]["count"].must_equal 2
 
       @grp_opts[:reduce] = BSON::Code.new(@reduce_function, {"inc_value" => 2})
-      $test.group( @grp_opts )[0]["count"].must_equal 4
+      Cfg.test.group( @grp_opts )[0]["count"].must_equal 4
     end
 
     it "should finalize grouped results" do
       @grp_opts[:finalize] = "function(doc) {doc.f = doc.count + 200; }"
-      $test.group( @grp_opts )[0]["f"].must_equal 202
+      Cfg.test.group( @grp_opts )[0]["f"].must_equal 202
     end
   end
 
   describe "Grouping with key" do
     before do
-      $test.remove
-      $test.save("a" => 1, "pop" => 100)
-      $test.save("a" => 1, "pop" => 100)
-      $test.save("a" => 2, "pop" => 100)
-      $test.save("a" => 2, "pop" => 100)
+      Cfg.test.remove
+      Cfg.test.save("a" => 1, "pop" => 100)
+      Cfg.test.save("a" => 1, "pop" => 100)
+      Cfg.test.save("a" => 2, "pop" => 100)
+      Cfg.test.save("a" => 2, "pop" => 100)
       @initial = {"count" => 0, "foo" => 1}
       @reduce_function = "function (obj, prev) { prev.count += obj.pop; }"
     end
 
     it "should group" do
-      result = $test.group(:key => ['a'], :initial => @initial, :reduce => @reduce_function)
+      result = Cfg.test.group(:key => ['a'], :initial => @initial, :reduce => @reduce_function)
       true.must_equal result.all? { |r| r['count'] == 200 }
     end
   end
 
   describe "Grouping with a key function" do
     before do
-      $test.remove
-      $test.save("a" => 1)
-      $test.save("a" => 2)
-      $test.save("a" => 3)
-      $test.save("a" => 4)
-      $test.save("a" => 5)
+      Cfg.test.remove
+      Cfg.test.save("a" => 1)
+      Cfg.test.save("a" => 2)
+      Cfg.test.save("a" => 3)
+      Cfg.test.save("a" => 4)
+      Cfg.test.save("a" => 5)
       @initial = {"count" => 0}
       @keyf    = "function (doc) { if(doc.a % 2 == 0) { return {even: true}; } else {return {odd: true}} };"
       @reduce  = "function (obj, prev) { prev.count += 1; }"
     end
 
     it "should group results" do
-      results = $test.group(:keyf => @keyf, :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
+      results = Cfg.test.group(:keyf => @keyf, :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
       true.must_equal results[0]['even'] && results[0]['count'] == 2.0
       true.must_equal results[1]['odd'] && results[1]['count'] == 3.0
     end
 
     it "should group filtered results" do
-      results = $test.group(:keyf => @keyf, :cond => {:a => {'$ne' => 2}},
+      results = Cfg.test.group(:keyf => @keyf, :cond => {:a => {'$ne' => 2}},
         :initial => @initial, :reduce => @reduce).sort {|a, b| a['count'] <=> b['count']}
       true.must_equal results[0]['even'] && results[0]['count'] == 1.0
       true.must_equal results[1]['odd'] && results[1]['count'] == 3.0
@@ -729,8 +718,7 @@ require 'minitest/spec'
 
   describe "A collection with two records" do
     before do
-      @collection = $db.collection('test-collection')
-      @collection.remove
+      @collection = Cfg.db.collection('test-collection')
       @collection.insert({:name => "Jones"})
       @collection.insert({:name => "Smith"})
     end
@@ -757,8 +745,8 @@ require 'minitest/spec'
 
   describe "Drop index " do
     before do
-      $db.drop_collection('test-collection')
-      @collection = $db.collection('test-collection')
+      Cfg.db.drop_collection('test-collection')
+      @collection = Cfg.db.collection('test-collection')
     end
 
     it "should drop an index" do
@@ -792,10 +780,10 @@ require 'minitest/spec'
 
   describe "Creating indexes " do
     before do
-      $db.drop_collection('geo')
-      $db.drop_collection('test-collection')
-      @collection = $db.collection('test-collection')
-      @geo        = $db.collection('geo')
+      Cfg.db.drop_collection('geo')
+      Cfg.db.drop_collection('test-collection')
+      @collection = Cfg.db.collection('test-collection')
+      @geo        = Cfg.db.collection('geo')
     end
 
     it "should create index using symbols" do
@@ -845,7 +833,7 @@ require 'minitest/spec'
     end
 
     it "should create an index in the background" do
-      if VERSION > '1.3.1'
+      if Cfg.version > '1.3.1'
         @collection.create_index([['b', Mongo::ASCENDING]], :background => true)
         assert @collection.index_information['b_1']['background'] == true
       else
@@ -896,8 +884,8 @@ require 'minitest/spec'
 
   # describe "Capped collections" do
   #   before do
-  #     $db.drop_collection('log')
-  #     @capped = $db.create_collection('log', :capped => true, :size => 1024)
+  #     Cfg.db.drop_collection('log')
+  #     @capped = Cfg.db.create_collection('log', :capped => true, :size => 1024)
 
   #     10.times { |n| @capped.insert({:n => n}) }
   #   end
@@ -913,7 +901,7 @@ require 'minitest/spec'
   #   end
 
   #   it "should fail tailable cursor on a non-capped collection" do
-  #     col = $db['regular-collection']
+  #     col = Cfg.db['regular-collection']
   #     col.insert({:a => 1000})
   #     tail = Cursor.new(col, :tailable => true, :order => [['$natural', 1]])
   #     assert_raises OperationFailure do

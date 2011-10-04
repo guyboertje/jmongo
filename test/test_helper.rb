@@ -51,20 +51,21 @@ unless defined? TEST_HOST
   TEST_HOST = ENV['MONGO_RUBY_DRIVER_HOST'] || 'localhost'
 end
 
-class MiniTest::Unit::TestCase
-  include Mongo
-  include BSON
-
-  def self.standard_connection(options={})
-    Connection.new(TEST_HOST, TEST_PORT, options)
+module Cfg
+  def self.connection(options={})
+    @con ||= Mongo::Connection.new(TEST_HOST, TEST_PORT, options)
   end
 
-  def standard_connection(options={})
-    self.class.standard_connection(options)
+  def self.conn
+    connection
+  end
+
+  def self.new_connection(options={})
+    Mongo::Connection.new(TEST_HOST, TEST_PORT, options)
   end
 
   def self.host_port
-    "#{mongo_host}:#{mongo_port}"
+    "#{TEST_HOST}:#{TEST_PORT}"
   end
 
   def self.mongo_host
@@ -75,17 +76,36 @@ class MiniTest::Unit::TestCase
     TEST_PORT
   end
 
-  def host_port
-    self.class.host_port
+  def self.db
+    @db ||= @con.db(MONGO_TEST_DB)
   end
 
-  def mongo_host
-    self.class.mongo_host
+  def self.version
+    @con.server_version
   end
 
-  def mongo_port
-    self.class.mongo_port
+  def self.clear_all
+    @db.collection_names.each do |n|
+      @db.drop_collection(n) unless n =~ /system/
+    end
   end
+
+  def self.test
+    @test ||= @db.collection("test")
+  end
+
+  def self.coll
+    test
+  end
+
+  def self.coll_full_name
+    "#{MONGO_TEST_DB}.test"
+  end
+end
+
+class MiniTest::Unit::TestCase
+  include Mongo
+  include BSON 
 
   def new_mock_socket(host='localhost', port=27017)
     socket = Object.new
@@ -96,6 +116,10 @@ class MiniTest::Unit::TestCase
 
   def new_mock_db
     db = Object.new
+  end
+
+  def assert_not_nil arg, msg = ""
+    refute_nil arg, msg
   end
 
   def assert_raise_error(klass, message)
