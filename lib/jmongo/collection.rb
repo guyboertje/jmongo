@@ -239,7 +239,10 @@ module Mongo
     # @core insert insert-instance_method
     def insert(doc_or_docs, options={})
       doc_or_docs = [doc_or_docs] unless doc_or_docs.kind_of?(Array)
-      doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
+      doc_or_docs.collect! do |doc|
+        @pk_factory.create_pk(doc)
+        prep_id(doc)
+      end
       continue = (options[:continue_on_error] || false)
       docs = insert_documents(doc_or_docs, options[:safe], continue)
       docs.size == 1 ? docs.first['_id'] : docs.collect{|doc| doc['_id']}

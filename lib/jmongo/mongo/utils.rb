@@ -22,6 +22,13 @@ module Mongo
         end
       end
 
+      def prep_id(doc)
+        if doc[:_id] && !doc['_id']
+          doc['_id'] = doc.delete(:_id)
+        end
+        doc
+      end
+
       def prep_fields(fields)
         case fields
         when String, Symbol

@@ -18,7 +18,7 @@ module BSON
     end
 
     def self.create_pk(doc)
-      doc.has_key?(:_id) || doc.has_key?('_id') ? doc : doc.merge!(:_id => self.new)
+      doc.has_key?(:_id) || doc.has_key?('_id') ? doc : doc.merge!('_id' => self.new)
     end
 
     def self.from_time(time, opts={})

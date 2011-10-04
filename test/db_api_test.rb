@@ -23,9 +23,7 @@ class DBAPITest < MiniTest::Unit::TestCase
   end
 
   def test_insert
-    _id = Cfg.coll.insert('a' => 2)
-    apr _id, "Basic insert"
-    assert_kind_of BSON::ObjectId, _id
+    assert_kind_of BSON::ObjectId, Cfg.coll.insert('a' => 2)
     assert_kind_of BSON::ObjectId, Cfg.coll.insert('b' => 3)
 
     assert_equal 3, Cfg.coll.count
@@ -40,8 +38,7 @@ class DBAPITest < MiniTest::Unit::TestCase
     assert_equal 4, docs.length
     assert docs.detect { |row| row['b'] == 4 }
   end
-end
-__END__
+
   def test_save_ordered_hash
     oh = BSON::OrderedHash.new
     oh['a'] = -1
