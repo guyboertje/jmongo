@@ -36,6 +36,10 @@ def replace_header(head, header_name)
   head.sub!(/(\.#{header_name}\s*= ').*'/) { "#{$1}#{send(header_name)}'"}
 end
 
+def jruby?
+  RUBY_PLATFORM.to_s == 'java'
+end
+
 #############################################################################
 #
 # Custom tasks
@@ -65,7 +69,16 @@ task :release => :build do
   sh "git tag v#{version}"
   sh "git push origin master"
   sh "git push origin v#{version}"
-  sh "gem push pkg/#{name}-#{version}.gem"
+
+  command = "gem push pkg/#{name}-#{version}.gem"
+
+  if jruby?
+    puts "--------------------------------------------------------------------------------------"
+    puts "can't push to rubygems using jruby at the moment, so switch to mri and run: #{command}"
+    puts "--------------------------------------------------------------------------------------"
+  else
+    sh command
+  end
 end
 
 desc "Build #{gem_file} into the pkg directory"
