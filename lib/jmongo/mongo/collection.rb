@@ -76,7 +76,7 @@ module Mongo
       end
 
       def remove_documents(obj, safe=nil)
-        concern = write_concern(safe)
+        concern = @db.write_concern(safe)
         wr = @j_collection.remove(to_dbobject(obj), concern)
         return from_dbobject(wr.last_error(concern)) if concern.call_get_last_error
         true
@@ -85,7 +85,7 @@ module Mongo
       ## Note: refactor when java driver fully supports continue_on_error
       def insert_documents(obj, safe=nil, continue_on_error=false)
         to_do = [obj].flatten
-        concern = write_concern(safe)
+        concern = @db.write_concern(safe)
         if continue_on_error
           out = []
           to_do.each do |doc|
@@ -145,7 +145,7 @@ module Mongo
 
       def update_documents(selector, document, upsert=false, multi=false, safe=nil)
         begin
-          @j_collection.update(to_dbobject(selector),to_dbobject(document), upsert, multi, write_concern(safe))
+          @j_collection.update(to_dbobject(selector),to_dbobject(document), upsert, multi, @db.write_concern(safe))
         rescue => ex
           if ex.message =~ /E11001/
             msg = "Failed to update document #{document.inspect}, duplicate key"
@@ -160,7 +160,7 @@ module Mongo
       def save_document(obj, safe=nil)
         @pk_factory.create_pk(obj)
         db_obj = to_dbobject(obj)
-        concern = write_concern(safe)
+        concern = @db.write_concern(safe)
         begin
           @j_collection.save( db_obj, concern )
         rescue => ex

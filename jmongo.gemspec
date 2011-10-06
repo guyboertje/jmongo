@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name              = 'jmongo'
-  s.version           = '1.1.0'
-  s.date              = '2011-10-03'
+  s.version           = '1.1.1'
+  s.date              = '2011-10-06'
   s.platform          = Gem::Platform::RUBY
   s.authors           = ["Chuck Remes","Guy Boertje", "Lee Henson"]
   s.email             = ["cremes@mac.com", "guyboertje@gmail.com", "lee.m.henson@gmail.com"]
@@ -37,7 +37,6 @@ Gem::Specification.new do |s|
     lib/jmongo/version.rb
     spec/jmongo_spec.rb
     spec/spec_helper.rb
-    test-results.txt
     test/auxillary/1.4_features.rb
     test/auxillary/authentication_test.rb
     test/auxillary/autoreconnect_test.rb

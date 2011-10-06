@@ -62,7 +62,7 @@ module Mongo
 
       def from_dbobject obj
         # for better upstream compatibility make the objects into ruby hash or array
-        
+
         case obj
         when Java::ComMongodb::BasicDBObject, Java::ComMongodb::CommandResult
           h = obj.hashify
@@ -112,24 +112,6 @@ module Mongo
           list[i] = to_dbobject(ele)
         end
         list
-      end
-
-      #@collection.save({:doc => 'foo'}, :safe => nil)       ---> NONE = new WriteConcern(-1)
-      #@collection.save({:doc => 'foo'}, :safe => true)        ---> NORMAL = new WriteConcern(0)
-      #@collection.save({:doc => 'foo'}, :safe => {:w => 2})   ---> new WriteConcern( 2 , 0 , false)
-      #@collection.save({:doc => 'foo'}, :safe => {:w => 2, :wtimeout => 200})                 ---> new WriteConcern( 2 , 200 , false)
-      #@collection.save({:doc => 'foo'}, :safe => {:w => 2, :wtimeout => 200, :fsync => true}) ---> new WriteConcern( 2 , 0 , true)
-      #@collection.save({:doc => 'foo'}, :safe => {:fsync => true}) ---> FSYNC_SAFE = new WriteConcern( 1 , 0 , true)
-
-      def write_concern(safe)
-        return JMongo::WriteConcern.new(-1) if safe.nil?
-        return JMongo::WriteConcern.new(0) if safe.is_a?(FalseClass)
-        return JMongo::WriteConcern.new(1) if safe.is_a?(TrueClass)
-        return JMongo::WriteConcern.new(0) unless safe.is_a?(Hash)
-        w = safe[:w] || 1
-        t = safe[:wtimeout] || 0
-        f = !!(safe[:fsync] || false)
-        JMongo::WriteConcern.new(w, t, f) #dont laugh!
       end
     end
   end

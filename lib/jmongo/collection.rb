@@ -219,7 +219,7 @@ module Mongo
     #   will be raised on an error. Note that a safe check requires an extra
     #   round-trip to the database.
     def save(doc, options={})
-      save_document(doc, (options[:safe] || false))
+      save_document(doc, options[:safe])
     end
 
     # Insert one or more documents into the collection.
@@ -240,9 +240,8 @@ module Mongo
     def insert(doc_or_docs, options={})
       doc_or_docs = [doc_or_docs] unless doc_or_docs.kind_of?(Array)
       doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
-      safe = (options[:safe] || false)
       continue = (options[:continue_on_error] || false)
-      docs = insert_documents(doc_or_docs, safe, continue)
+      docs = insert_documents(doc_or_docs, options[:safe], continue)
       docs.size == 1 ? docs.first['_id'] : docs.collect{|doc| doc['_id']}
     end
     alias_method :<<, :insert
@@ -269,8 +268,7 @@ module Mongo
     #
     # @core remove remove-instance_method
     def remove(selector={}, options={})
-      safe = (options[:safe] || false)
-      remove_documents(selector,safe)
+      remove_documents(selector,options[:safe])
     end
 
     # Update a single document in this collection.
@@ -295,8 +293,7 @@ module Mongo
     # @core update update-instance_method
     def update(selector, document, options={})
       upsert, multi = !!(options[:upsert]), !!(options[:multi])
-      safe = (options[:safe] || false)
-      update_documents(selector, document, upsert, multi, safe)
+      update_documents(selector, document, upsert, multi, options[:safe])
     end
 
     # Create a new index.

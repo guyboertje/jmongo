@@ -44,3 +44,5 @@ Please note that the java driver handles the Replica Sets and connection pools
 If you are using Replica Sets and want to use JMongo you should be OK if you use a URI to connect.
 JMongo lets the Java driver handle reading from slaves and writing to master, although YMMV as I have not
 tested JMongo with Replica Sets yet.
+If you intend to use the fsync=true uri option to imply safe=true on your queries, at the moment you will also
+need to specify the w option in the uri. e.g. mongodb://0.0.0.0:27017/?fsync=true;w=1;
