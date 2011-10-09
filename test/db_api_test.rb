@@ -7,6 +7,7 @@ class DBAPITest < MiniTest::Unit::TestCase
   include Mongo
 
   def setup
+    Cfg.db.strict = false
     Cfg.clear_all
     @r1 = {'a' => 1}
     Cfg.coll.insert(@r1) # collection not created until it's used
@@ -235,8 +236,6 @@ class DBAPITest < MiniTest::Unit::TestCase
     assert names.length >= 2
     assert names.include?(Cfg.coll.name)
     assert names.include?('test2')
-  ensure
-    Cfg.db.drop_collection('test2')
   end
 
   def test_collections_info
@@ -279,54 +278,46 @@ class DBAPITest < MiniTest::Unit::TestCase
     assert_equal Cfg.coll.index_information.length, 1
 
     name = Cfg.coll.create_index('a')
+    assert_equal "a_1", name
+
     info = Cfg.db.index_information(Cfg.coll.name)
-    assert_equal name, "a_1"
     assert_equal Cfg.coll.index_information, info
     assert_equal 2, info.length
-
     assert info.has_key?(name)
     assert_equal info[name]["key"], {"a" => 1}
-  ensure
-    Cfg.db.drop_index(Cfg.coll.name, name)
   end
 
   def test_index_create_with_symbol
     info = Cfg.coll.index_information
     assert_equal info.length, 1
     name = Cfg.coll.create_index([['a', 1]])
+    assert_equal "a_1", name
+
     info = Cfg.db.index_information(Cfg.coll.name)
-    assert_equal name, "a_1"
     assert_equal Cfg.coll.index_information, info
     assert_equal 2, info.length
-
     assert info.has_key?(name)
     assert_equal info[name]['key'], {"a" => 1}
-  ensure
-    Cfg.db.drop_index(Cfg.coll.name, name)
   end
 
   def test_multiple_index_cols
     name = Cfg.coll.create_index([['a', DESCENDING], ['b', ASCENDING], ['c', DESCENDING]])
+    assert_equal 'a_-1_b_1_c_-1', name
+
     info = Cfg.db.index_information(Cfg.coll.name)
     assert_equal 2, info.length
-
-    assert_equal name, 'a_-1_b_1_c_-1'
     assert info.has_key?(name)
     assert_equal info[name]['key'], {"a" => -1, "b" => 1, "c" => -1}
-  ensure
-    Cfg.db.drop_index(Cfg.coll.name, name)
   end
 
   def test_multiple_index_cols_with_symbols
     name = Cfg.coll.create_index([[:a, DESCENDING], [:b, ASCENDING], [:c, DESCENDING]])
+    assert_equal name, 'a_-1_b_1_c_-1'
+
     info = Cfg.db.index_information(Cfg.coll.name)
     assert_equal 2, info.length
-
-    assert_equal name, 'a_-1_b_1_c_-1'
     assert info.has_key?(name)
     assert_equal info[name]['key'], {"a" => -1, "b" => 1, "c" => -1}
-  ensure
-    Cfg.db.drop_index(Cfg.coll.name, name)
   end
 
   def test_unique_index
@@ -386,20 +377,21 @@ class DBAPITest < MiniTest::Unit::TestCase
       assert_equal regex, rows[0]['b']
     else
       assert_equal 2, rows.length
-      assert_equal regex, rows[1]['b']
+      ret_regex = rows[1]['b']
+      assert_equal regex, ret_regex
+      assert "fOObar" =~ ret_regex
     end
   end
 
   def test_regex_multi_line
-    if Cfg.version >= "1.9.1"
+    skip("test is for future version") unless Cfg.version >= "1.9.1"
 doc = <<HERE
   the lazy brown
   fox
 HERE
-      Cfg.coll.save({:doc => doc})
-      assert Cfg.coll.find_one({:doc => /n.*x/m})
-      Cfg.coll.remove
-    end
+    Cfg.coll.save({:doc => doc})
+    assert Cfg.coll.find_one({:doc => /n.*x/m})
+    Cfg.coll.remove
   end
 
   def test_non_oid_id
@@ -422,16 +414,10 @@ HERE
 
   def test_strict_access_collection
     Cfg.db.strict = true
-    begin
+    assert_raises Mongo::MongoDBError do
       Cfg.db.collection('does-not-exist')
-      fail "expected exception"
-    rescue => ex
-      assert_equal Mongo::MongoDBError, ex.class
-      assert_equal "Collection does-not-exist doesn't exist. Currently in strict mode.", ex.to_s
-    ensure
-      Cfg.db.strict = false
-      Cfg.db.drop_collection('does-not-exist')
     end
+    Cfg.db.strict = false
   end
 
   def test_strict_create_collection
@@ -487,30 +473,29 @@ HERE
   end
 
   def test_hint
-    name = Cfg.coll.create_index('a')
+    coll = Cfg.coll
+    name = coll.create_index('a')
     begin
-      assert_nil Cfg.coll.hint
-      assert_equal 1, Cfg.coll.find({'a' => 1}, :hint => 'a').to_a.size
-      assert_equal 1, Cfg.coll.find({'a' => 1}, :hint => ['a']).to_a.size
-      assert_equal 1, Cfg.coll.find({'a' => 1}, :hint => {'a' => 1}).to_a.size
+      assert_nil coll.hint
+      assert_equal 1, coll.find({'a' => 1}, :hint => 'a').to_a.size
+      assert_equal 1, coll.find({'a' => 1}, :hint => ['a']).to_a.size
+      assert_equal 1, coll.find({'a' => 1}, :hint => {'a' => 1}).to_a.size
 
-      Cfg.coll.hint = 'a'
-      assert_equal({'a' => 1}, Cfg.coll.hint)
-      assert_equal 1, Cfg.coll.find('a' => 1).to_a.size
+      coll.hint = 'a'
+      assert_equal({'a' => 1}, coll.hint)
+      assert_equal 1, coll.find('a' => 1).to_a.size
 
-      Cfg.coll.hint = ['a']
-      assert_equal({'a' => 1}, Cfg.coll.hint)
-      assert_equal 1, Cfg.coll.find('a' => 1).to_a.size
+      coll.hint = ['a']
+      assert_equal({'a' => 1}, coll.hint)
+      assert_equal 1, coll.find('a' => 1).to_a.size
 
-      Cfg.coll.hint = {'a' => 1}
-      assert_equal({'a' => 1}, Cfg.coll.hint)
-      assert_equal 1, Cfg.coll.find('a' => 1).to_a.size
+      coll.hint = {'a' => 1}
+      assert_equal({'a' => 1}, coll.hint)
+      assert_equal 1, coll.find('a' => 1).to_a.size
 
-      Cfg.coll.hint = nil
-      assert_nil Cfg.coll.hint
-      assert_equal 1, Cfg.coll.find('a' => 1).to_a.size
-    ensure
-      Cfg.coll.drop_index(name)
+      coll.hint = nil
+      assert_nil coll.hint
+      assert_equal 1, coll.find('a' => 1).to_a.size
     end
   end
 
@@ -562,8 +547,8 @@ HERE
 
   def test_deref
     Cfg.coll.remove
-
-    assert_equal nil, Cfg.db.dereference(DBRef.new("test", ObjectId.new))
+    dbref = DBRef.new("test", ObjectId.new)
+    assert_equal nil, Cfg.db.dereference(dbref)
     Cfg.coll.insert({"x" => "hello"})
     key = Cfg.coll.find_one()["_id"]
     assert_equal "hello", Cfg.db.dereference(DBRef.new("test", key))["x"]
@@ -699,6 +684,7 @@ HERE
 
   # doesn't really test functionality, just that the option is set correctly
   def test_snapshot
+    skip("i am pointless")
     Cfg.db.collection("test").find({}, :snapshot => true).to_a
     assert_raises OperationFailure do
       Cfg.db.collection("test").find({}, :snapshot => true, :sort => 'a').to_a

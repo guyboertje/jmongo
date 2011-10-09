@@ -29,19 +29,26 @@ module Mongo
       def exec_command(cmd)
         cmd_hash = cmd.kind_of?(Hash) ? cmd : {cmd => 1}
         cmd_res = @j_db.command(to_dbobject(cmd_hash))
-        from_dbobject(cmd_res)
+        from_dbobject cmd_res
       end
 
       def do_eval(string, *args)
-        @j_db.do_eval(string, *args)
+        command(BSON::OrderedHash['$eval', string,'args', args])
       end
 
-      def has_coll(name)
-        @j_db.collection_exists(name)
+      def collection_exists?(name)
+        system_name?(name) || @j_db.collection_exists(name)
       end
 
       def get_last_error
         from_dbobject @j_db.get_last_error
+      end
+
+      def _collections_info(coll_name=nil)
+        selector = {}
+        selector[:name] = full_collection_name(coll_name) if coll_name
+        coll = @j_db.get_collection(SYSTEM_NAMESPACE_COLLECTION)
+        from_dbobject(coll.find(to_dbobject(selector)))
       end
     end
   end

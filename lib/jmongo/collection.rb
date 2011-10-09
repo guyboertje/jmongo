@@ -19,7 +19,7 @@ module Mongo
     include Mongo::JavaImpl::Collection_
 
     attr_reader :j_collection, :j_db
-    attr_reader :db, :name, :pk_factory, :hint
+    attr_reader :db, :name, :pk_factory
 
     # Initialize a collection object.
     #
@@ -57,9 +57,13 @@ module Mongo
       @name = validate_name(name)
       @db, @j_db  = db, db.j_db
       @connection = @db.connection
-      @pk_factory = @opts[:pk] || BSON::ObjectId
+      @pk_factory = @opts.delete(:pk)|| BSON::ObjectId
       @hint = nil
-      @j_collection = j_collection || @j_db.get_collection(@name)
+      @j_collection = j_collection || @j_db.create_collection(@name, to_dbobject(@opts))
+    end
+
+    def safe
+      !!(@opts.fetch(:safe, false))
     end
 
     # Return a sub-collection of this collection by name. If 'users' is a collection, then
@@ -75,13 +79,13 @@ module Mongo
     #   the specified sub-collection
     def [](name)
       new_name = "#{self.name}.#{name}"
-      validate_name new_name
-      @db.create_collection(new_name, @opts)
+      @db.collection(new_name, @opts)
     end
 
     def capped?
-      @j_collection.isCapped
+      @j_collection.capped?
     end
+
     # Set a hint field for query optimizer. Hint may be a single field
     # name, array of field names, or a hash (preferably an [OrderedHash]).
     # If using MongoDB > 1.1, you probably don't ever need to set a hint.
@@ -89,8 +93,13 @@ module Mongo
     # @param [String, Array, OrderedHash] hint a single field, an array of
     #   fields, or a hash specifying fields
     def hint=(hint=nil)
+      @hint = prep_hint(hint)
+      self
     end
 
+    def hint
+      @hint 
+    end
     # Query the database.
     #
     # The +selector+ argument is a prototype document that all results must
@@ -152,7 +161,7 @@ module Mongo
       end
 
       if hint
-        hint = normalize_hint_fields(hint)
+        hint = prep_hint(hint)
       else
         hint = @hint        # assumed to be normalized already
       end
@@ -243,8 +252,9 @@ module Mongo
         @pk_factory.create_pk(doc)
         prep_id(doc)
       end
+      safe = options.fetch(:safe, @opts[:safe])
       continue = (options[:continue_on_error] || false)
-      docs = insert_documents(doc_or_docs, options[:safe], continue)
+      docs = insert_documents(doc_or_docs, safe, continue)
       docs.size == 1 ? docs.first['_id'] : docs.collect{|doc| doc['_id']}
     end
     alias_method :<<, :insert
@@ -296,7 +306,8 @@ module Mongo
     # @core update update-instance_method
     def update(selector, document, options={})
       upsert, multi = !!(options[:upsert]), !!(options[:multi])
-      update_documents(selector, document, upsert, multi, options[:safe])
+      safe = options.fetch(:safe, @opts[:safe])
+      update_documents(selector, document, upsert, multi, safe)
     end
 
     # Create a new index.
@@ -342,10 +353,13 @@ module Mongo
     #
     # @core indexes create_index-instance_method
     def create_index(spec, opts={})
-      _create_indexes(spec, opts)
+      _create_index(spec, opts)
     end
-    alias_method :ensure_index, :create_index
 
+    def ensure_index(spec, opts={})
+      _ensure_index(spec, opts)
+    end
+      
     # Drop a specified index.
     #
     # @param [String, Array] spec
@@ -586,10 +600,10 @@ module Mongo
     #
     # @raise [Mongo::InvalidNSName] if +new_name+ is an invalid collection name.
     def rename(new_name)
-      name = validate_name(new_name)
+      _name = validate_name(new_name)
       begin
-        jcol = @j_collection.rename(name)
-        @name = name
+        jcol = @j_collection.rename(_name)
+        @name = _name
         @j_collection = jcol
       rescue => ex
         raise MongoDBError, "Error renaming collection: #{name}, more: #{ex.message}"
@@ -611,7 +625,6 @@ module Mongo
     # @return [Hash] options that apply to this collection.
     def options
       info = @db.collections_info(@name).to_a
-      ap info
       info.last['options']
     end
 
@@ -635,39 +648,5 @@ module Mongo
     end
 
     alias :size :count
-
-    protected
-
-    def validate_name(new_name)
-      raise TypeError, "new_name must be a string like" unless new_name.respond_to?(:to_s)
-
-      name = new_name.to_s
-
-      if name.empty? || name.include?("..")
-        raise Mongo::InvalidNSName, "collection names cannot be empty"
-      end
-      if name.include? "$"
-        raise Mongo::InvalidNSName, "collection names must not contain '$'" unless name =~ /((^\$cmd)|(oplog\.\$main))/
-      end
-      if name.match(/^\./) || name.match(/\.$/)
-        raise Mongo::InvalidNSName, "collection names must not start or end with '.'"
-      end
-      name
-    end
-
-    def normalize_hint_fields(hint)
-      case hint
-      when String
-        {hint => 1}
-      when Hash
-        hint
-      when nil
-        nil
-      else
-        h = BSON::OrderedHash.new
-        hint.to_a.each { |k| h[k.to_s] = 1 }
-        h
-      end
-    end
   end
 end

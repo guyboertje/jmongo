@@ -51,9 +51,13 @@ unless defined? TEST_HOST
   TEST_HOST = ENV['MONGO_RUBY_DRIVER_HOST'] || 'localhost'
 end
 
+unless defined? TEST_URI
+  TEST_URI = "mongodb://localhost/?fsync=true;w=1"
+end
+
 module Cfg
   def self.connection(options={})
-    @con ||= Mongo::Connection.new(TEST_HOST, TEST_PORT, options)
+    @con ||= Mongo::Connection.from_uri(TEST_URI)
   end
 
   def self.conn
@@ -61,7 +65,7 @@ module Cfg
   end
 
   def self.new_connection(options={})
-    Mongo::Connection.new(TEST_HOST, TEST_PORT, options)
+    Mongo::Connection.from_uri(TEST_URI, options)
   end
 
   def self.host_port
@@ -91,7 +95,7 @@ module Cfg
   end
 
   def self.test
-    @test ||= @db.collection("test")
+    @db.collection("test")
   end
 
   def self.coll

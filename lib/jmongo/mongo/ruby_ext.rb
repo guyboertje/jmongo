@@ -11,6 +11,12 @@ class Symbol
   end
 end
 
+class Regexp
+  def to_bson
+    Java::JavaUtilRegex::Pattern.compile(source, options * 2)
+  end
+end
+
 class Object
   def to_bson
     self

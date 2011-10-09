@@ -10,15 +10,12 @@ class TestCollection < MiniTest::Unit::TestCase
   end
 
   def test_capped_method
-    Cfg.db.drop_collection('normal')
 
-    Cfg.db.create_collection('normal')
+    Cfg.db.create_collection('normal').insert('x'=>3)
     assert !Cfg.db['normal'].capped?
-    Cfg.db.drop_collection('normal')
 
-    Cfg.db.create_collection('c', :capped => true, :size => 100_000)
+    Cfg.db.create_collection('c', :capped => true, :size => 100_000).insert('g'=>4)
     assert Cfg.db['c'].capped?
-    Cfg.db.drop_collection('c')
   end
 
   def test_optional_pk_factory
@@ -75,12 +72,9 @@ class TestCollection < MiniTest::Unit::TestCase
   end
 
   def test_rename_collection
-    Cfg.db.drop_collection('foo1')
-    Cfg.db.drop_collection('bar1')
-
     @col = Cfg.db.create_collection('foo1')
+    @col.insert("x" => 5) #must insert something to actually create collection
     assert_equal 'foo1', @col.name
-
     @col.rename('bar1')
     assert_equal 'bar1', @col.name
   end
@@ -360,19 +354,19 @@ class TestCollection < MiniTest::Unit::TestCase
   def test_insert_adds_id
     doc = {"hello" => "world"}
     Cfg.test.insert(doc)
-    assert(doc.include?(:_id))
+    assert(doc.include?(:_id) || doc.include?('_id'))
 
     docs = [{"hello" => "world"}, {"hello" => "world"}]
     Cfg.test.insert(docs)
     docs.each do |d|
-      assert(d.include?(:_id))
+      assert(d.include?(:_id) || doc.include?('_id'))
     end
   end
 
   def test_save_adds_id
     doc = {"hello" => "world"}
     Cfg.test.save(doc)
-    assert(doc.include?(:_id))
+    assert(doc.include?(:_id) || doc.include?('_id'))
   end
 
   def test_optional_find_block
@@ -638,11 +632,13 @@ end
 
 require 'minitest/spec'
 
-Cfg.clear_all
+describe "Collection" do
+  before do
+    Cfg.clear_all
+  end
 
   describe "Grouping" do
     before do
-      Cfg.test.remove
       Cfg.test.save("a" => 1)
       Cfg.test.save("b" => 1)
       @initial = {"count" => 0}
@@ -674,7 +670,6 @@ Cfg.clear_all
 
   describe "Grouping with key" do
     before do
-      Cfg.test.remove
       Cfg.test.save("a" => 1, "pop" => 100)
       Cfg.test.save("a" => 1, "pop" => 100)
       Cfg.test.save("a" => 2, "pop" => 100)
@@ -691,7 +686,6 @@ Cfg.clear_all
 
   describe "Grouping with a key function" do
     before do
-      Cfg.test.remove
       Cfg.test.save("a" => 1)
       Cfg.test.save("a" => 2)
       Cfg.test.save("a" => 3)
@@ -745,7 +739,6 @@ Cfg.clear_all
 
   describe "Drop index " do
     before do
-      Cfg.db.drop_collection('test-collection')
       @collection = Cfg.db.collection('test-collection')
     end
 
@@ -780,9 +773,9 @@ Cfg.clear_all
 
   describe "Creating indexes " do
     before do
-      Cfg.db.drop_collection('geo')
       Cfg.db.drop_collection('test-collection')
       @collection = Cfg.db.collection('test-collection')
+      @collection.insert({:aaa => 1})
       @geo        = Cfg.db.collection('geo')
     end
 
@@ -805,14 +798,17 @@ Cfg.clear_all
 
     it "should create a unique index" do
       @collection.create_index([['a', Mongo::ASCENDING]], :unique => true)
-      assert @collection.index_information['a_1']['unique'] == true
+      info = @collection.index_information['a_1']
+      assert info
+      assert info['unique']
     end
 
     it "should drop duplicates" do
       @collection.insert({:a => 1})
       @collection.insert({:a => 1})
-      assert_equal 2, @collection.find({:a => 1}).count
+      assert_equal 2, @collection.count(:query => {:a => 1})
       @collection.create_index([['a', Mongo::ASCENDING]], :unique => true, :dropDups => true)
+      assert_equal 1, @collection.find({:a => 1}).count
       assert_equal 1, @collection.find({:a => 1}).count
     end
 
@@ -919,3 +915,4 @@ Cfg.clear_all
   #     assert tail.next_document
   #   end
   # end
+end

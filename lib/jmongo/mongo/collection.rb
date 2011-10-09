@@ -7,14 +7,14 @@ module Mongo
       private
 
       def name_from opts
-        return unless (opts[:name] || opts['name'])
         name = opts.delete(:name) || opts.delete('name')
         name ? name.to_s : nil
       end
 
       def _drop_index(spec)
         name = generate_index_name(spec.is_a?(String) || spec.is_a?(Symbol) ? spec : parse_index_spec(spec))
-        idx = @db.index_information(@name).values.select do |entry|
+        info = @db.index_information(@name)
+        idx = info.values.select do |entry|
           entry['name'] == name || name == generate_index_name(entry['key'])
         end
         if idx.nil? || idx.empty?
@@ -23,17 +23,24 @@ module Mongo
         @j_collection.dropIndexes(idx.first['name'].to_s)
       end
 
-      def _create_indexes(obj,opts = {})
-        name = name_from(opts)
+      def _ensure_index(obj, opts = {})
+        opts[:ensure] = true
+        _create_index(obj, opts)
+      end
+
+      def _create_index(obj, opts = {})
+        opt_name = name_from(opts)
+        opts[:dropDups] = opts.delete(:drop_dups) if opts.has_key?(:drop_dups)
         field_spec = parse_index_spec(obj)
-        opts[:dropDups] = opts[:drop_dups] if opts[:drop_dups]
-        if obj.is_a?(String) || obj.is_a?(Symbol)
-          name = obj.to_s unless name
-        end
-        name = generate_index_name(field_spec) unless name
-        opts['name'] = name
+        name = generate_index_name(field_spec)
+        opts['name'] = opt_name || name
+        opts['ns'] = @j_collection.full_name
         begin
-          @j_collection.ensureIndex(to_dbobject(field_spec),to_dbobject(opts))
+          if opts.delete(:ensure)
+            @j_collection.ensure_index(to_dbobject(field_spec),to_dbobject(opts))
+          else
+            @j_collection.create_index(to_dbobject(field_spec),to_dbobject(opts))
+          end
         rescue => e
           if opts[:dropDups] && e.message =~ /E11000/
             # NOP. If the user is intentionally dropping dups, we can ignore duplicate key errors.
@@ -42,7 +49,7 @@ module Mongo
             raise Mongo::OperationFailure, msg
           end
         end
-        name
+        opts['name']
       end
 
       def generate_index_name(spec)

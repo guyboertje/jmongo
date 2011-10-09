@@ -2,7 +2,6 @@ module BSON
   # add missing BSON::ObjectId ruby methods
   java_import Java::OrgBsonTypes::ObjectId
 
-  java_import Java::ComMongodb::DBRef
   java_import Java::OrgBsonTypes::MaxKey
   java_import Java::OrgBsonTypes::MinKey
   java_import Java::OrgBsonTypes::Symbol
@@ -105,6 +104,31 @@ module BSON
     alias :to_bson_code :to_bson
   end
 
+  class DBRef
+
+    attr_reader :namespace, :object_id
+
+    # Create a DBRef. Use this class in conjunction with DB#dereference.
+    #
+    # @param [String] a collection name
+    # @param [ObjectId] an object id
+    #
+    # @core dbrefs constructor_details
+    def initialize(namespace, object_id)
+      @namespace = namespace
+      @object_id = object_id
+    end
+
+    def to_s
+      "ns: #{namespace}, id: #{object_id}"
+    end
+
+    def to_hash
+      {"$ns" => @namespace, "$id" => @object_id }
+    end
+
+  end
+  
   # Generic Mongo Ruby Driver exception class.
   class MongoRubyError < StandardError; end
 

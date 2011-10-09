@@ -21,12 +21,51 @@ module Mongo
           raise ex_class, msg ? "#{msg} - #{ex.message}" : ex.message
         end
       end
+      
+      def system_name?(name)
+        name =~ /((^\$cmd)|(oplog\.\$main))/
+      end
 
+      def validate_name(new_name)
+        unless [String, Symbol].include?(new_name.class)
+          raise TypeError, "db_name must be a string or symbol"
+        end
+
+        name = new_name.to_s
+
+        if name.empty?
+          raise Mongo::InvalidNSName, "collection names cannot be empty"
+        end
+        if name.include?("..")
+          raise Mongo::InvalidNSName, "collection names cannot contain '..'"
+        end
+        if name.include? "$"
+          raise Mongo::InvalidNSName, "collection names cannot contain '$'" unless name =~ /((^\$cmd)|(oplog\.\$main))/
+        end
+        if name.match(/^\./) || name.match(/\.$/)
+          raise Mongo::InvalidNSName, "collection names cannot start or end with '.'"
+        end
+        name
+      end
+      
       def prep_id(doc)
         if doc[:_id] && !doc['_id']
           doc['_id'] = doc.delete(:_id)
         end
         doc
+      end
+
+      def prep_hint(hint)
+        case hint
+        when String, Symbol
+          {hint => 1}
+        when Hash
+          hint
+        when nil
+          nil
+        else
+          Hash[hint.to_a.zip( [1]*hint.size )]
+        end
       end
 
       def prep_fields(fields)
@@ -82,6 +121,8 @@ module Mongo
           Time.at(obj.get_time/1000.0)
         when Java::OrgBsonTypes::Symbol
           obj.toString.to_sym
+        when Java::JavaUtilRegex::Pattern
+          Regexp.new(obj.pattern, (obj.flags/2))
         else
           obj
         end

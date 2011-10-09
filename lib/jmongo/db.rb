@@ -22,7 +22,7 @@ module Mongo
     attr_reader :name
     attr_reader :connection
 
-    attr_writer :strict
+    attr_accessor :strict
 
     ProfileLevel = {:off => 0, :slow_only => 1, :all => 2, 0 => 'off', 1 => 'slow_only', 2 => 'all'}
 
@@ -31,6 +31,7 @@ module Mongo
       @connection = connection
       @j_db = @connection.connection.get_db db_name
       @pk_factory = options[:pk]
+      @safe = options[:safe]
       @strict = options.fetch(:strict, false)
     end
 
@@ -69,34 +70,40 @@ module Mongo
     end
 
     def collections_info(coll_name=nil)
-      selector = {}
-      selector[:name] = full_collection_name(coll_name) if coll_name
-      coll = self.collection(SYSTEM_NAMESPACE_COLLECTION)
-      coll.find selector
+      _collections_info coll_name
     end
 
     def create_collection(name, options={})
-      if collection_names.include?(name)
-        raise MongoDBError, "Collection #{name} already exists. Currently in strict mode." if @strict
-        collection(name, options)
-      else
-        begin
-          jc = @j_db.create_collection(name, to_dbobject(options))
-          Collection.new self, name, options, jc
-        rescue NativeException => ex
-          raise MongoDBError, "Collection #{name} creation error: " +
-              ex.message
+      validate_name(name)
+      if collection_exists?(name)
+        if strict?
+          raise MongoDBError, "Collection #{name} already exists. Currently in strict mode."
+        else
+          return Collection.new self, name, options, @j_db.get_collection(name)
         end
+      end
+      begin
+        Collection.new self, name, options
+      rescue => ex
+        raise MongoDBError, "Collection #{name} creation error: " + ex.message
       end
     end
 
     def collection(name, options = {})
-      Collection.new self, name, options
+      validate_name(name)
+      if strict? && !collection_exists?(name) 
+        raise MongoDBError, "Collection #{name} does not exists. Currently in strict mode."
+      else
+        Collection.new self, name, options, @j_db.get_collection(name)
+      end
     end
     alias_method :[], :collection
 
     def drop_collection(name)
-      coll = collection(name).j_collection.drop
+      col_name = name.to_s
+      return true unless collection_exists?(col_name)
+
+      ok?(command(:drop => col_name))
     end
 
     def get_last_error
@@ -122,15 +129,13 @@ module Mongo
 
     def dereference(dbref)
       ns = dbref.namespace
-      raise MongoArgumentError, "No namespace for dbref: #{dbref.inspect}"
+      raise MongoArgumentError, "No collection for dbref: #{dbref.inspect}" unless collection_exists?(ns)
       collection(ns).find_one("_id" => dbref.object_id)
     end
 
     def eval(code, *args)
       doc = do_eval(code, *args)
-      return unless doc
-      return doc['retval']['value'] if doc['retval'] && doc['retval']['value']
-      doc['retval']
+      (retval = doc['retval']).is_a?(Hash) && (value = retval['value']) ? value : retval
     end
 
     def rename_collection(from, to)
@@ -148,7 +153,7 @@ module Mongo
 
     def index_information(collection_name)
       info = {}
-      from_dbobject(@j_db.get_collection(collection_name).get_index_info).each do |index|
+      from_dbobject(@j_db.getCollectionFromString(collection_name).getIndexInfo).each do |index|
         info[index['name']] = index
       end
       info
@@ -257,11 +262,6 @@ module Mongo
         raise MongoDBError, "Error: invalid collection #{name}: #{doc.inspect}"
       end
       doc
-    end
-
-    # additions to the ruby driver
-    def has_collection?(name)
-      has_coll name
     end
   end # class DB
 

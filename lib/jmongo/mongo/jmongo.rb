@@ -3,7 +3,6 @@ module JMongo
   java_import com.mongodb.BasicDBObject
   java_import com.mongodb.Bytes
   java_import com.mongodb.DB
-  java_import com.mongodb.DBRef
   java_import com.mongodb.DBCollection
   java_import com.mongodb.DBCursor
   java_import com.mongodb.DBObject
