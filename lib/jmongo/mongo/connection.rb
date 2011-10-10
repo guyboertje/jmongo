@@ -18,8 +18,9 @@ module Mongo
 
       module ClassMethods
         URI_RE = /^mongodb:\/\/(([-.\w]+):([^@]+)@)?([-.\w]+)(:([\w]+))?(\/([-\w]+))?/
-        OPTS_KEYS = %W[maxpoolsize waitqueuemultiple waitqueuetimeoutms connecttimeoutms sockettimeoutms
-                       autoconnectretry slaveok safe w wtimeout fsync]
+        OPTS_KEYS = %W[maxpoolsize connecttimeoutms autoconnectretry
+                       waitqueuemultiple waitqueuetimeoutms sockettimeoutms
+                       slaveok safe w wtimeout fsync]
 
         def _from_uri uri, opts={}
           optarr = []

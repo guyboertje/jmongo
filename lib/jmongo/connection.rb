@@ -20,28 +20,40 @@ module Mongo
     include Mongo::JavaImpl::Connection_::InstanceMethods
      extend Mongo::JavaImpl::Connection_::ClassMethods
 
-    attr_reader :connection, :connector, :logger, :auths, :primary
+    attr_reader :connection, :connector, :logger, :auths, :primary, :write_concern
 
     DEFAULT_PORT = 27017
 
     def initialize host = nil, port = nil, opts = {}
+      @logger = opts.delete(:logger)
+      @auths = opts.delete(:auths) || []
       if opts.has_key?(:new_from_uri)
-        @options = opts
         @mongo_uri = opts[:new_from_uri]
+        @options = @mongo_uri.options
+        @write_concern = @options.write_concern
         @connection = JMongo::Mongo.new(@mongo_uri)
       else
-        @logger = opts[:logger]
         @host = host || 'localhost'
         @port = port || 27017
         @server_address = JMongo::ServerAddress.new @host, @port
         @options = JMongo::MongoOptions.new
-        @options.connectionsPerHost = opts[:pool_size] || 1
-        @options.socketTimeout = opts[:timeout].to_i * 1000 || 5000
+        opts.each do |k,v|
+          key = k.to_sym
+          jmo_key = JMongo.options_ruby2java_lu(key)
+          case jmo_key
+          when :safe
+            @write_concern = DB.write_concern(v)
+            @options.w = @write_concern.w
+            @options.wtimeout = @write_concern.wtimeout
+            @options.fsync = @write_concern.fsync
+          else
+            jmo_val = JMongo.options_ruby2java_xf(key, v)
+            @options.send("#{jmo_key}=", jmo_val)
+          end
+        end
         @connection = JMongo::Mongo.new(@server_address, @options)
       end
       @connector = @connection.connector
-      @logger = opts[:logger]
-      @auths = opts.fetch(:auths, [])
       add = @connector.address
       @primary = [add.host, add.port]
     end
@@ -124,7 +136,10 @@ module Mongo
     #
     # @return [Hash]
     def database_info
-      raise_not_implemented
+      doc = self['admin'].command({:listDatabases => 1})
+      doc['databases'].each_with_object({}) do |db, info|
+        info[db['name']] = db['sizeOnDisk'].to_i
+      end
     end
 
     # Return an array of database names.
@@ -143,7 +158,7 @@ module Mongo
     #
     # @core databases db-instance_method
     def db(db_name, options={})
-      DB.new db_name, self, options
+      DB.new db_name, self, options 
     end
 
     # Shortcut for returning a database. Use DB#db to accept options.

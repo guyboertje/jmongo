@@ -18,13 +18,23 @@ module Mongo
     include Mongo::JavaImpl::Db_
     include Mongo::JavaImpl::Utils
 
-    attr_reader :j_db
-    attr_reader :name
-    attr_reader :connection
+    attr_reader :j_db, :name, :connection, :safe
 
     attr_accessor :strict
 
     ProfileLevel = {:off => 0, :slow_only => 1, :all => 2, 0 => 'off', 1 => 'slow_only', 2 => 'all'}
+
+    def self.write_concern(safe_)
+      return safe_ if safe_.is_a?(JMongo::WriteConcern)
+      return JMongo::WriteConcern.new(0) if safe_.is_a?(FalseClass)
+      return JMongo::WriteConcern.new(true) if safe_.is_a?(TrueClass)
+      return JMongo::WriteConcern.new(safe.to_i) if safe_.is_a?(Numeric)
+      return JMongo::WriteConcern.new(-1) unless safe_.is_a?(Hash)
+      w = safe_.fetch(:w, 0)
+      t = safe_.fetch(:wtimeout, 0)
+      f = !!safe_.fetch(:fsync, false)
+      JMongo::WriteConcern.new(w, t, f) #dont laugh!
+    end
 
     def initialize(db_name, connection, options={})
       @name       = db_name
@@ -65,7 +75,7 @@ module Mongo
 
     def collections
       collection_names.map do |name|
-        Collection.new(self, name)
+        collection(name)
       end
     end
 
@@ -148,7 +158,7 @@ module Mongo
     end
 
     def drop_index(collection_name, index_name)
-      self[collection_name].drop_index(index_name)
+      collection(collection_name).drop_index(index_name)
     end
 
     def index_information(collection_name)

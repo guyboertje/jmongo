@@ -63,7 +63,7 @@ module Mongo
     end
 
     def safe
-      !!(@opts.fetch(:safe, false))
+      !!@opts.fetch(:safe, false)
     end
 
     # Return a sub-collection of this collection by name. If 'users' is a collection, then

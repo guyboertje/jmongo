@@ -100,7 +100,7 @@ module Mongo
             out << res if res
           end
           if to_do.size != out.size
-            msg = "Failed to insert document #{obj.inspect}, duplicate key"
+            msg = "Failed to insert document #{obj.inspect}, duplicate key, E11000"
             raise(Mongo::OperationFailure, msg)
           end
         else
@@ -109,7 +109,7 @@ module Mongo
           rescue => ex
             if ex.message =~ /E11000/
               msg = "Failed to insert document #{obj.inspect}, duplicate key, E11000"
-              raise(Mongo::OperationFailure, msg)
+              raise(Mongo::OperationFailure, msg) if concern.w > 0
             else
               msg = "Failed to insert document #{obj.inspect} db error: #{ex.message}"
               raise Mongo::MongoDBError, msg
@@ -152,11 +152,12 @@ module Mongo
 
       def update_documents(selector, document, upsert=false, multi=false, safe=nil)
         begin
-          @j_collection.update(to_dbobject(selector),to_dbobject(document), upsert, multi, @db.write_concern(safe))
+          concern = @db.write_concern(safe)
+          @j_collection.update(to_dbobject(selector),to_dbobject(document), upsert, multi, concern)
         rescue => ex
           if ex.message =~ /E11001/
             msg = "Failed to update document #{document.inspect}, duplicate key"
-            raise(Mongo::OperationFailure, msg)
+            raise(Mongo::OperationFailure, msg) if concern.w > 0
           else
             msg = "Failed to update document #{document.inspect} db error: #{ex.message}"
             raise Mongo::MongoDBError, msg

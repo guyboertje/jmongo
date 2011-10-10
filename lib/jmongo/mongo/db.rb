@@ -13,15 +13,8 @@ module Mongo
       #@collection.save({:doc => 'foo'}, :safe => {:w => 2, :wtimeout => 200, :fsync => true}) ---> new WriteConcern( 2 , 0 , true)
       #@collection.save({:doc => 'foo'}, :safe => {:fsync => true}) ---> FSYNC_SAFE = new WriteConcern( 1 , 0 , true)
 
-      def write_concern(safe)
-        return @j_db.write_concern if safe.nil?
-        return JMongo::WriteConcern.new(0) if safe.is_a?(FalseClass)
-        return JMongo::WriteConcern.new(1) if safe.is_a?(TrueClass)
-        return JMongo::WriteConcern.new(0) unless safe.is_a?(Hash)
-        w = safe[:w] || 1
-        t = safe[:wtimeout] || 0
-        f = !!(safe[:fsync] || false)
-        JMongo::WriteConcern.new(w, t, f) #dont laugh!
+      def write_concern(safe_)
+        self.class.write_concern(safe_ || self.safe || @connection.write_concern)
       end
 
       private

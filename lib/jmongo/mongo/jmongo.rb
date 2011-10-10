@@ -15,6 +15,27 @@ module JMongo
   java_import com.mongodb.MongoURI
   java_import com.mongodb.MapReduceCommand
   java_import com.mongodb.MapReduceOutput
+
+  SECS_TO_MILLI_FUNC = lambda { |v| v.to_f * 1_000 }  
+  DO_NOTHING_FUNC = lambda { |v| v }
+
+  RUBY_JAVA_OPTIONS_KEYS = {
+    :pool_size => [:connections_per_host, DO_NOTHING_FUNC],
+    :pool_timeout => [:max_wait_time, SECS_TO_MILLI_FUNC],
+    :timeout => [:max_wait_time, SECS_TO_MILLI_FUNC],
+    :op_timeout => [:socket_timeout, SECS_TO_MILLI_FUNC],
+    :connect_timeout => [:connect_timeout, SECS_TO_MILLI_FUNC]
+  }
+
+  RUBY_JAVA_OPTIONS_KEYS.default = [nil, DO_NOTHING_FUNC]
+
+  def self.options_ruby2java_lu(key)
+    RUBY_JAVA_OPTIONS_KEYS[key].first || key
+  end
+
+  def self.options_ruby2java_xf(key,val)
+    RUBY_JAVA_OPTIONS_KEYS[key].last[val] || val
+  end
 end
 
 class Java::ComMongodb::BasicDBObject

@@ -331,12 +331,14 @@ class DBAPITest < MiniTest::Unit::TestCase
     assert !Cfg.db.error?
 
     Cfg.db.drop_collection("blah")
-    test = Cfg.db.collection("blah")
+    test = Cfg.db.collection("blah", :safe => true)
     test.create_index("hello", :unique => true)
 
     test.insert("hello" => "world")
     test.insert("hello" => "mike")
-    test.insert("hello" => "world")
+    assert_raises Mongo::OperationFailure do
+      test.insert("hello" => "world")
+    end
     assert Cfg.db.error?
   end
 
@@ -357,6 +359,8 @@ class DBAPITest < MiniTest::Unit::TestCase
     test.insert("hello" => {"a" => 7, "b" => 2})
     test.insert("hello" => {"a" => 4, "b" => 10})
     assert Cfg.db.error?
+    assert 2, test.count
+
   end
 
   def test_array

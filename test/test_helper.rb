@@ -52,12 +52,13 @@ unless defined? TEST_HOST
 end
 
 unless defined? TEST_URI
-  TEST_URI = "mongodb://localhost/?fsync=true;w=1"
+  TEST_URI = "mongodb://localhost"
 end
 
 module Cfg
   def self.connection(options={})
-    @con ||= Mongo::Connection.from_uri(TEST_URI)
+    #@con ||= Mongo::Connection.from_uri(TEST_URI)
+    @con ||= Mongo::Connection.new(TEST_HOST, TEST_PORT)
   end
 
   def self.conn
