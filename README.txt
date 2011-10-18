@@ -26,7 +26,7 @@ the collection and cursor test suites pass. NOTE: a few (2/3) tests have been sk
 them to see if they affect you.
 
 The Mongoid rspec functional suite runs 2607 examples with 28 failures when using JMongo
-My Mongoid repo was forked after this commit (so newer funtionality/spec will be missing)
+My Mongoid repo was forked after this commit (so newer funtionality/specs will be missing)
   commit 6cc97092bc10535b8b65647a3d14b10ca1b94c8c
   Author: Bernerd Schaefer <bj.schaefer@gmail.com>
   Date:   Tue Jun 28 12:59:34 2011 +0200
@@ -36,7 +36,7 @@ The failures are classed in this way:
   * Managing Replica Sets directly
   * Managing Connection Pools directly
   * XML serialization
-  * Ruby RegExp to BSON encode and decode
+  * Ruby RegExp to BSON encode and decode (FIXED)
 
 I will fix these problems in due course
 
@@ -46,3 +46,12 @@ JMongo lets the Java driver handle reading from slaves and writing to master, al
 tested JMongo with Replica Sets yet.
 If you intend to use the fsync=true uri option to imply safe=true on your queries, at the moment you will also
 need to specify the w option in the uri. e.g. mongodb://0.0.0.0:27017/?fsync=true;w=1;
+
+2011-10-18
+  I have added non-blocking support to the Cursor if it is tailable and bound to a Capped Collection.
+  This is to have similar behaviour to the ruby driver as far as test expectations.
+  The unblocking behaviour is achieved by inserting a "poison doc" into the capped collection in a timeout thread.
+  In the Cursor.new options hash if you set await_data to hash, float or true it will not block on cursor.next.
+  a value of true will use the defaults, a value of float will set the timeout whaile a hash will allow you to
+  control the timeout as well as your own poison doc and the poison doc equality (lambda/proc) mechanism.
+  The default timeout is 0.125 seconds.

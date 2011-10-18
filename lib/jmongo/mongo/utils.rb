@@ -1,6 +1,48 @@
 # Copyright (C) 2010 Guy Boertje
 
 module Mongo
+
+  class TimeoutThread
+    attr_reader :thread, :timeout
+    def initialize(collection, doc, timeout)
+      @collection = collection
+      @doc = doc
+      @timeout = timeout
+      @queue = SizedQueue.new(1)
+      spawn_thread
+    end
+
+    def trigger
+      @queue.push(true) if @queue.length == 0
+    end
+
+    def cancel
+      return if @thread[:cancel]
+      @thread[:cancel] = true
+    end
+
+    def stop
+      @queue.push false
+    end
+
+    private
+
+    def spawn_thread
+      @thread = Thread.new do
+        while true
+          going = @queue.pop
+          break if !going
+          sleep @timeout
+          unless Thread.current[:cancel]
+            @collection.insert(@doc)
+          end
+          Thread.current[:cancel] = false
+        end
+      end
+      @thread[:cancel] = false
+    end
+  end
+
   module JavaImpl
 
     module NoImplYetClass
@@ -10,6 +52,7 @@ module Mongo
     end
 
     module Utils
+            
       def raise_not_implemented
         raise NoMethodError, "This method hasn't been implemented yet."
       end

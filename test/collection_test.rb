@@ -878,41 +878,61 @@ describe "Collection" do
     end
   end
 
-  # describe "Capped collections" do
-  #   before do
-  #     Cfg.db.drop_collection('log')
-  #     @capped = Cfg.db.create_collection('log', :capped => true, :size => 1024)
+  describe "Capped collections" do
+    before do
+      Cfg.db.drop_collection('log')
+      @capped = Cfg.db.create_collection('log', :capped => true, :max => 1000, :size => 400000)
 
-  #     10.times { |n| @capped.insert({:n => n}) }
-  #   end
+      1000.times { |n| @capped.insert({:n => n}) }
+    end
 
-  #   it "should find using a standard cursor" do
-  #     cursor = @capped.find
-  #     10.times do
-  #       assert cursor.next_document
-  #     end
-  #     assert_nil cursor.next_document
-  #     @capped.insert({:n => 100})
-  #     assert_nil cursor.next_document
-  #   end
+    it "should find using a standard cursor" do
+      cursor = @capped.find
+      1000.times do
+        assert cursor.next_document
+      end
+      assert_nil cursor.next_document
+      @capped.insert({:n => 100})
+      assert_nil cursor.next_document
+    end
 
-  #   it "should fail tailable cursor on a non-capped collection" do
-  #     col = Cfg.db['regular-collection']
-  #     col.insert({:a => 1000})
-  #     tail = Cursor.new(col, :tailable => true, :order => [['$natural', 1]])
-  #     assert_raises OperationFailure do
-  #       tail.next_document
-  #     end
-  #   end
+    it "should fail tailable cursor on a non-capped collection" do
+      col = Cfg.db['regular-collection']
+      col.insert({:a => 1000})
+      tail = Mongo::Cursor.new(col, :tailable => true, :order => [['$natural', 1]])
+      assert_raises Mongo::OperationFailure do
+        tail.next_document
+      end
+    end
 
-  #   it "should find using a tailable cursor" do
-  #     tail = Cursor.new(@capped, :tailable => true, :order => [['$natural', 1]])
-  #     10.times do
-  #       assert tail.next_document
-  #     end
-  #     assert_nil tail.next_document
-  #     @capped.insert({:n => 100})
-  #     assert tail.next_document
-  #   end
-  # end
+    it "should find using a tailable cursor" do
+      tail = Mongo::Cursor.new(@capped, :timeout => false, :tailable => true, :await_data => true, :order => [['$natural', 1]])
+      1000.times do
+        assert tail.next_document
+      end
+      assert true, tail.has_next?
+      assert_nil tail.next_document
+    end
+
+    it "should find using a tailable cursor with await_data set to a float" do
+      tail = Mongo::Cursor.new(@capped, :timeout => false, :tailable => true, :await_data => 3.0, :order => [['$natural', 1]])
+      1000.times do
+        assert tail.next_document
+      end
+      assert true, tail.has_next?
+      assert_nil tail.next_document
+    end
+
+    it "should find using a tailable cursor with await_data set to hash" do
+      await = {:poison_doc => {'pppppoisoned' => 42},
+               :is_poison_function => lambda { |doc| doc['pppppoisoned'] == 42 },
+               :next_timeout => 2.0}
+      tail = Mongo::Cursor.new(@capped, :timeout => false, :tailable => true, :await_data => await, :order => [['$natural', 1]])
+      1000.times do
+        assert tail.next_document
+      end
+      assert true, tail.has_next?
+      assert_nil tail.next_document
+    end
+  end
 end

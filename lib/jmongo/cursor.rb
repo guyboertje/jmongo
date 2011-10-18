@@ -17,6 +17,8 @@ module Mongo
   class Cursor
     include Mongo::JavaImpl::Utils
 
+    NEXT_DOCUMENT_TIMEOUT = 0.125
+
     attr_reader :j_cursor, :collection, :selector, :fields,
       :order, :hint, :snapshot, :timeout,
       :full_collection_name, :transformer,
@@ -25,7 +27,6 @@ module Mongo
     def initialize(collection, options={})
       @collection = collection
       @j_collection = collection.j_collection
-      @query_run = false
       @selector   = convert_selector_for_query(options[:selector])
       @fields     = convert_fields_for_query(options[:fields])
       @admin      = options.fetch(:admin, false)
@@ -42,8 +43,25 @@ module Mongo
       @explain    = options[:explain]
       @socket     = options[:socket]
       @timeout    = options.fetch(:timeout, true)
-      @tailable   = options.fetch(:tailable, false)
       @transformer = options[:transformer]
+      @tailable   = options.fetch(:tailable, false)
+      @await_data  = @tailable ? options[:await_data] : nil
+      @next_timeout = NEXT_DOCUMENT_TIMEOUT
+      @is_poison_function = nil
+      case @await_data
+      when Hash
+        @poison_doc = @await_data.fetch(:poison_doc, default_poison_doc)
+        @is_poison_function = @await_data[:is_poison_function]
+        @next_timeout = @await_data.fetch(:next_timeout, NEXT_DOCUMENT_TIMEOUT).to_f
+      when Numeric
+        @poison_doc = default_poison_doc
+        @next_timeout = @await_data.to_f
+      when TrueClass
+        @poison_doc = default_poison_doc
+      else
+        @poison_doc = nil
+      end
+      @timeout_thread = TimeoutThread.new(@collection, @poison_doc, @next_timeout) if @tailable && @poison_doc
 
       @full_collection_name = "#{@collection.db.name}.#{@collection.name}"
 
@@ -52,12 +70,13 @@ module Mongo
 
     def rewind!
       close
-      @query_run = false
       spawn_cursor
     end
 
     def close
-      @query_run = true
+      if @j_cursor.num_seen == 0 && !@tailable
+        @j_cursor.next rescue nil
+      end
       @j_cursor.close
     end
 
@@ -74,13 +93,13 @@ module Mongo
     end
 
     def add_option(opt)
-      check_modifiable
+      raise_invalid_op if @j_cursor.num_seen != 0
       @j_cursor.addOption(opt)
       options
     end
 
     def options
-      @j_cursor.getOptions
+      @j_cursor.options
     end
 
     def query_opts
@@ -90,7 +109,7 @@ module Mongo
     end
 
     def remove_option(opt)
-      check_modifiable
+      raise_invalid_op if @j_cursor.num_seen != 0
       @j_cursor.setOptions(options & ~opt)
       options
     end
@@ -100,7 +119,15 @@ module Mongo
     end
 
     def next_document
-      _xform(has_next? ? __next : nil)
+      doc = nil
+      trap_raise(Mongo::OperationFailure) do
+        if @tailable
+          doc = __next
+        elsif has_next?
+          doc = __next
+        end
+      end
+      _xform(doc)
     end
     alias :next :next_document
 
@@ -114,12 +141,15 @@ module Mongo
     private :_xform
 
     def has_next?
-      @j_cursor.has_next?
+      if @tailable
+        true
+      else
+        @j_cursor.has_next?
+      end
     end
 
     # iterate directly from the mongo db
     def each
-      check_modifiable
       while has_next?
         yield next_document
       end
@@ -127,7 +157,6 @@ module Mongo
 
     def _batch_size(size=nil)
       return if size.nil?
-      check_modifiable
       raise ArgumentError, "batch_size requires an integer" unless size.is_a? Integer
       @batch_size = size
     end
@@ -140,8 +169,7 @@ module Mongo
     end
 
     def _limit(number_to_return=nil)
-      return if number_to_return.nil?
-      check_modifiable
+      return if number_to_return.nil? && @limit
       raise ArgumentError, "limit requires an integer" unless number_to_return.is_a? Integer
       @limit = number_to_return
     end
@@ -150,14 +178,13 @@ module Mongo
     def limit(number_to_return=nil)
       _limit(number_to_return)
       wrap_invalid_op do
-        @j_cursor = @j_cursor.limit(@limit) if @limit
+        @j_cursor = @j_cursor.limit(@limit)
       end
       self
     end
 
     def _skip(number_to_skip=nil)
-      return if number_to_skip.nil?
-      check_modifiable
+      return if number_to_skip.nil? && @skip
       raise ArgumentError, "skip requires an integer" unless number_to_skip.is_a? Integer
       @skip = number_to_skip
     end
@@ -166,14 +193,13 @@ module Mongo
     def skip(number_to_skip=nil)
       _skip(number_to_skip)
       wrap_invalid_op do
-        @j_cursor = @j_cursor.skip(@skip) if @skip
+        @j_cursor = @j_cursor.skip(@skip)
       end
       self
     end
 
     def _sort(key_or_list=nil, direction=nil)
-      return if key_or_list.nil?
-      check_modifiable
+      return if key_or_list.nil? && @order
       @order = prep_sort(key_or_list, direction)
     end
     private :_sort
@@ -181,7 +207,7 @@ module Mongo
     def sort(key_or_list, direction=nil)
       _sort(key_or_list, direction)
       wrap_invalid_op do
-        @j_cursor = @j_cursor.sort(@order) if @order
+        @j_cursor = @j_cursor.sort(@order)
       end
       self
     end
@@ -191,11 +217,12 @@ module Mongo
     end
 
     def count(skip_and_limit = false)
-      if skip_and_limit && @skip && @limit
-        check_modifiable
-        @j_cursor.size
-      else
-        @j_cursor.count
+      wrap_invalid_op do
+        if skip_and_limit && @skip && @limit
+          @j_cursor.size
+        else
+          @j_cursor.count
+        end
       end
     end
 
@@ -225,11 +252,45 @@ module Mongo
       Set.new self.to_a
     end
 
+    def done_size
+      @j_cursor.num_seen
+    end
+
+    def to_do_size
+      @j_cursor.size - @j_cursor.num_seen
+    end
+
     private
 
+    def default_poison_doc
+      { 'jmongo_poison_document' => true }
+    end
+
+    def default_is_poison?(doc)
+      !!doc['jmongo_poison_document']
+    end
+
     def __next
-      @query_run = true
-      from_dbobject(@j_cursor.next)
+      @timeout_thread.trigger if @tailable
+      doc = from_dbobject(@j_cursor.next)
+      if @tailable
+        if poisoned?(doc)
+          nil
+        else
+          @timeout_thread.cancel
+          doc
+        end
+      else
+        doc
+      end
+    end
+
+    def poisoned?(doc)
+      if @is_poison_function
+        @is_poison_function.call(doc)
+      else
+        default_is_poison?(doc)
+      end
     end
 
     # Convert the +:fields+ parameter from a single field name or an array
@@ -260,19 +321,26 @@ module Mongo
         @j_cursor = @j_cursor.sort(@order) if @order
         @j_cursor = @j_cursor.skip(@skip) if @skip && @skip > 0
         @j_cursor = @j_cursor.limit(@limit) if @limit && @limit > 0
+        @j_cursor = @j_cursor.hint(@hint) if @hint
+        @j_cursor = @j_cursor.snapshot if @snapshot
         @j_cursor = @j_cursor.batchSize(@batch_size) if @batch_size && @batch_size > 0
-
-        @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
-        @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
+        opts_bf = @j_cursor.options
+        opts_bf = mask_option(opts_bf, JMongo::Bytes::QUERYOPTION_NOTIMEOUT, !@timeout)
+        opts_bf = mask_option(opts_bf, JMongo::Bytes::QUERYOPTION_TAILABLE, !!@tailable)
+        opts_bf = mask_option(opts_bf, JMongo::Bytes::QUERYOPTION_AWAITDATA, !!@await_data)
+        @j_cursor.options = opts_bf
       end
 
       self
     end
 
-    def check_modifiable
-      if @query_run
-        raise_invalid_op
+    def mask_option(bitfield, bit, set = true)
+      if set
+        bitfield |= bit
+      else
+        bitfield &= ~bit
       end
+      bitfield
     end
 
     def wrap_invalid_op
