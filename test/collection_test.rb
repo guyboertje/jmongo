@@ -904,8 +904,17 @@ describe "Collection" do
         tail.next_document
       end
     end
-
+    
     it "should find using a tailable cursor" do
+      tail = Mongo::Cursor.new(@capped, :timeout => false, :tailable => true, :order => [['$natural', 1]])
+      1000.times do
+        assert tail.next_document
+      end
+      assert true, tail.has_next?
+      assert_nil tail.next_document
+    end
+
+    it "should find using a tailable cursor with await_data" do
       tail = Mongo::Cursor.new(@capped, :timeout => false, :tailable => true, :await_data => true, :order => [['$natural', 1]])
       1000.times do
         assert tail.next_document

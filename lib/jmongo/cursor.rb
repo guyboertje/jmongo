@@ -38,30 +38,31 @@ module Mongo
       _limit options[:limit]
       _sort options[:order]
       _batch_size options[:batch_size]
-      @hint       = options[:hint]
+      _hint options[:hint]
       @snapshot   = options[:snapshot]
       @explain    = options[:explain]
       @socket     = options[:socket]
       @timeout    = options.fetch(:timeout, true)
       @transformer = options[:transformer]
       @tailable   = options.fetch(:tailable, false)
-      @await_data  = @tailable ? options[:await_data] : nil
-      @next_timeout = NEXT_DOCUMENT_TIMEOUT
-      @is_poison_function = nil
-      case @await_data
-      when Hash
-        @poison_doc = @await_data.fetch(:poison_doc, default_poison_doc)
-        @is_poison_function = @await_data[:is_poison_function]
-        @next_timeout = @await_data.fetch(:next_timeout, NEXT_DOCUMENT_TIMEOUT).to_f
-      when Numeric
+      @do_tailable_timeout = false
+
+      if @tailable
+        @await_data  = options.fetch(:await_data, true)
+        @next_timeout = NEXT_DOCUMENT_TIMEOUT
+        @is_poison_function = nil
         @poison_doc = default_poison_doc
-        @next_timeout = @await_data.to_f
-      when TrueClass
-        @poison_doc = default_poison_doc
-      else
-        @poison_doc = nil
+        @do_tailable_timeout = true
+        case @await_data
+        when Hash
+          @poison_doc = @await_data.fetch(:poison_doc, default_poison_doc)
+          @is_poison_function = @await_data[:is_poison_function]
+          @next_timeout = @await_data.fetch(:next_timeout, NEXT_DOCUMENT_TIMEOUT).to_f
+        when Numeric
+          @next_timeout = @await_data.to_f
+        end
+        @timeout_thread = TimeoutThread.new(@collection, @poison_doc, @next_timeout)
       end
-      @timeout_thread = TimeoutThread.new(@collection, @poison_doc, @next_timeout) if @tailable && @poison_doc
 
       @full_collection_name = "#{@collection.db.name}.#{@collection.name}"
 
@@ -153,6 +154,11 @@ module Mongo
       while has_next?
         yield next_document
       end
+    end
+
+    def _hint(hint = nil)
+      return if hint.nil?
+      @hint = to_dbobject(hint)
     end
 
     def _batch_size(size=nil)
@@ -271,9 +277,9 @@ module Mongo
     end
 
     def __next
-      @timeout_thread.trigger if @tailable
-      doc = from_dbobject(@j_cursor.next)
-      if @tailable
+      if @do_tailable_timeout
+        @timeout_thread.trigger
+        doc = from_dbobject(@j_cursor.next)
         if poisoned?(doc)
           nil
         else
@@ -281,7 +287,7 @@ module Mongo
           doc
         end
       else
-        doc
+        from_dbobject(@j_cursor.next)
       end
     end
 
@@ -324,11 +330,8 @@ module Mongo
         @j_cursor = @j_cursor.hint(@hint) if @hint
         @j_cursor = @j_cursor.snapshot if @snapshot
         @j_cursor = @j_cursor.batchSize(@batch_size) if @batch_size && @batch_size > 0
-        opts_bf = @j_cursor.options
-        opts_bf = mask_option(opts_bf, JMongo::Bytes::QUERYOPTION_NOTIMEOUT, !@timeout)
-        opts_bf = mask_option(opts_bf, JMongo::Bytes::QUERYOPTION_TAILABLE, !!@tailable)
-        opts_bf = mask_option(opts_bf, JMongo::Bytes::QUERYOPTION_AWAITDATA, !!@await_data)
-        @j_cursor.options = opts_bf
+        @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_NOTIMEOUT unless @timeout
+        @j_cursor = @j_cursor.addOption JMongo::Bytes::QUERYOPTION_TAILABLE if @tailable
       end
 
       self
