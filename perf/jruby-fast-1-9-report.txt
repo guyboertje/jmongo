@@ -1,0 +1,19 @@
+Using jmongo
+
+Rehearsing...
+                                                  user     system      total        real
+Create 100k new docs no _id                  12.330000   0.000000  12.330000 ( 12.330000)
+Create 100k new docs w _id                    6.108000   0.000000   6.108000 (  6.107000)
+Batch insert 100 x 1k new docs no _id         1.800000   0.000000   1.800000 (  1.801000)
+Batch insert 100 x 1k new docs w _id          0.906000   0.000000   0.906000 (  0.906000)
+Update 100k docs w _id                        4.978000   0.000000   4.978000 (  4.978000)
+Safe insert 100 x 1k new docs w _id          10.255000   0.000000  10.255000 ( 10.255000)
+
+Starting benchmark...
+                                                  user     system      total        real
+Create 100k new docs no _id                   5.763000   0.000000   5.763000 (  5.764000)
+Create 100k new docs w _id                    4.394000   0.000000   4.394000 (  4.395000)
+Batch insert 100 x 1k new docs no _id         1.392000   0.000000   1.392000 (  1.392000)
+Batch insert 100 x 1k new docs w _id          0.777000   0.000000   0.777000 (  0.777000)
+Update 100k docs w _id                        3.620000   0.000000   3.620000 (  3.621000)
+Safe insert 100 x 1k new docs w _id           9.946000   0.000000   9.946000 (  9.946000)

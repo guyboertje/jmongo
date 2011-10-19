@@ -1,0 +1,19 @@
+Using mongo
+
+Rehearsing...
+                                                   user     system      total        real
+Create 100k new docs no _id                   12.900000   1.270000  14.170000 ( 14.982664)
+Create 100k new docs w _id                    12.050000   1.170000  13.220000 ( 13.454074)
+Batch insert 100 x 1k new docs no _id          3.750000   0.010000   3.760000 (  3.857861)
+Batch insert 100 x 1k new docs w _id           2.710000   0.010000   2.720000 (  2.752081)
+Update 100k docs w _id                         9.900000   1.240000  11.140000 ( 11.395796)
+Safe insert 100 x 1k new docs w _id            2.790000   0.000000   2.790000 ( 12.785164)
+
+Starting benchmark...
+                                                   user     system      total        real
+Create 100k new docs no _id                    9.690000   1.210000  10.900000 ( 11.295992)
+Create 100k new docs w _id                     8.850000   1.310000  10.160000 ( 10.531102)
+Batch insert 100 x 1k new docs no _id          3.760000   0.000000   3.760000 (  3.976799)
+Batch insert 100 x 1k new docs w _id           2.720000   0.020000   2.740000 (  2.804571)
+Update 100k docs w _id                         9.850000   1.220000  11.070000 ( 11.287460)
+Safe insert 100 x 1k new docs w _id            2.760000   0.020000   2.780000 ( 13.170553)
