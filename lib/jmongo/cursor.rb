@@ -337,15 +337,6 @@ module Mongo
       self
     end
 
-    def mask_option(bitfield, bit, set = true)
-      if set
-        bitfield |= bit
-      else
-        bitfield &= ~bit
-      end
-      bitfield
-    end
-
     def wrap_invalid_op
       begin
         yield
