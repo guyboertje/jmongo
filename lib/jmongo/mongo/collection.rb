@@ -108,7 +108,7 @@ module Mongo
             @j_collection.insert( to_dbobject(to_do), concern )
             if @monitorable
               mon_do = to_do.map{ |doc| {'_id'=>doc['_id'], 'action'=>1} }
-              @j_mon_collection.( to_dbobject(mon_do), concern )
+              @j_mon_collection.insert( to_dbobject(mon_do), concern )
             end
           rescue => ex
             if ex.message =~ /E11000/

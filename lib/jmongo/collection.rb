@@ -48,23 +48,35 @@ module Mongo
       if args.size < 2
         raise ArgumentError.new("Must supply at least name and db parameters")
       end
-      if args.first.respond_to?('collection_names')
-        db, name = args
-      else
+      if args.first.is_a?(String)
         name, db = args
-      end
-      @monitor = @opts.delete(:monitor)
-      if @monitor
-        setup_monitor
-      elsif @opts.has_key?(:monitor_source)
-        @monitor_source = @opts.delete(:monitor_source)
+      else
+        db, name = args
       end
       @name = validate_name(name)
       @db, @j_db  = db, db.j_db
       @connection = @db.connection
       @pk_factory = @opts.delete(:pk)|| BSON::ObjectId
       @hint = nil
+
+      @monitor = @opts.delete(:monitor)
+      if @monitor
+        setup_monitor
+      elsif @opts.has_key?(:monitor_source)
+        @monitor_source = @opts.delete(:monitor_source)
+      end
+
       @j_collection = j_collection || @j_db.create_collection(@name, to_dbobject(@opts))
+    end
+
+    def setup_monitor
+      mon_opts = @monitor.is_a?(Hash)? @monitor : {}
+      size = mon_opts.fetch(:size, 8000)
+      @monitor_max = mon_opts.fetch(:max, 100)
+      opts = {:capped => true, :max => @monitor_max, :size => size, :monitor_source => self}
+      @mon_collection = @db.create_collection("#{@name}-monitor", opts)
+      @j_mon_collection = @mon_collection.j_collection
+      @monitorable = true
     end
 
     def safe
@@ -653,59 +665,44 @@ module Mongo
     end
 
     alias :size :count
-  end
 
-  def monitor_collection
-    raise InvalidOperation, "Monitoring has not been setup, add :monitor - true or Hash" unless @monitorable
-    @mon_collection
-  end
-
-  def monitored_collection
-    @monitor_source
-  end
-
-  def monitor_subscribe(opts)
-    raise InvalidOperation, "Not a monitorable collection" if @monitor_source.nil?
-    callback_doc = opts[:callback_doc]
-    raise InvalidOperation, "Need a callable for document callback" unless callback_doc.respond_to?('call')
-    callback_exit = opts[:callback_exit]
-    raise InvalidOperation, "Need a callable for exit callback" unless callback_doc.respond_to?('call')
-    exit_check_timeout = opts[:exit_check_timeout]
-    raise InvalidOperation, "Need a positive float for timeout" unless exit_check_timeout.to_f > 0.0
-
-    tail = Mongo::Cursor.new(self, :timeout => false, :tailable => true, :await_data => 0.5, :order => [['$natural', 1]])
-    loop_th = Thread.new(tail, callback_doc) do |cur, cb|
-      while !Thread.current[:stop]
-        doc = cur.next
-        cb.call(doc) if doc
-      end
+    def monitor_collection
+      raise InvalidOperation, "Monitoring has not been setup, add :monitor - true or Hash" unless @monitorable
+      @mon_collection
     end
-    loop_th[:stop] = false
-    exit_th = Thread.new(exit_check_timeout.to_f, callback_exit) do |to, cb|
-      while true
-        must_exit = cb.call
-        break if must_exit
-        sleep to
-      end
-      loop_th[:stop] = true
+
+    def monitored_collection
+      @monitor_source
     end
-    tail = Mongo::Cursor.new(self, :timeout => false, :tailable => true, :await_data => 0.5, :order => [['$natural', 1]])
-    #
-  end
-   
-  private
 
-  def setup_monitor
-    mon_opts = @monitor.is_a?(Hash)? @monitor : {}
-    size = mon_opts.fetch(:size, 8000)
-    @monitor_max = mon_opts.fetch(:max, 100)
-    opts = {:capped => true, :max => @monitor_max, :size => size, :monitor_source => self}
-    @mon_collection = class.new("#{@name}-monitor", opts)
-    @j_mon_collection = @mon_collection.j_collection
-    @mon_callback_doc = mon_opts[:callback_doc]
-    @mon_callback_exit = mon_opts[:callback_exit]
-    @monitorable = true
-  end
+    def monitor_subscribe(opts, &callback_doc)
+      raise InvalidOperation, "Not a monitorable collection" if @monitor_source.nil?
+      callback_exit = opts[:callback_exit]
+      raise InvalidOperation, "Need a callable for exit callback" unless callback_doc.respond_to?('call')
+      exit_check_timeout = opts[:exit_check_timeout]
+      raise InvalidOperation, "Need a positive float for timeout" unless exit_check_timeout.to_f > 0.0
 
+      tail = Mongo::Cursor.new(self, :timeout => false, :tailable => true, :await_data => 0.5, :order => [['$natural', 1]])
+      
+      loop_th = Thread.new(tail, callback_doc) do |cur, cb|
+        while !Thread.current[:stop]
+          doc = cur.next
+          cb.call(doc) if doc
+        end
+      end
+      loop_th[:stop] = false
 
-end
+      exit_th = Thread.new(exit_check_timeout.to_f, callback_exit) do |to, cb|
+        while true
+          must_exit = cb.call
+          break if must_exit
+          sleep to
+        end
+        loop_th[:stop] = true
+      end
+      #
+    end
+
+    
+  end #class
+end #module
