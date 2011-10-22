@@ -676,11 +676,13 @@ module Mongo
     end
 
     def monitor_subscribe(opts, &callback_doc)
-      raise InvalidOperation, "Not a monitorable collection" if @monitor_source.nil?
+      raise MongoArgumentError, "Not a monitorable collection" if @monitor_source.nil?
+      raise MongoArgumentError, "Must supply a block" unless block_given?
+      raise MongoArgumentError, "opts needs to be a Hash" unless opts.is_a?(Hash)
       callback_exit = opts[:callback_exit]
-      raise InvalidOperation, "Need a callable for exit callback" unless callback_doc.respond_to?('call')
+      raise MongoArgumentError, "Need a callable for exit callback" unless callback_doc.respond_to?('call')
       exit_check_timeout = opts[:exit_check_timeout]
-      raise InvalidOperation, "Need a positive float for timeout" unless exit_check_timeout.to_f > 0.0
+      raise MongoArgumentError, "Need a positive float for timeout" unless exit_check_timeout.to_f > 0.0
 
       tail = Mongo::Cursor.new(self, :timeout => false, :tailable => true, :await_data => 0.5, :order => [['$natural', 1]])
       
@@ -694,9 +696,9 @@ module Mongo
 
       exit_th = Thread.new(exit_check_timeout.to_f, callback_exit) do |to, cb|
         while true
+          sleep to
           must_exit = cb.call
           break if must_exit
-          sleep to
         end
         loop_th[:stop] = true
       end
