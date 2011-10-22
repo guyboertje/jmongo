@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name              = 'jmongo'
-  s.version           = '1.1.4'
-  s.date              = '2011-10-19'
+  s.version           = '1.1.5'
+  s.date              = '2011-10-22'
   s.platform          = Gem::Platform::RUBY
   s.authors           = ["Chuck Remes","Guy Boertje", "Lee Henson"]
   s.email             = ["cremes@mac.com", "guyboertje@gmail.com", "lee.m.henson@gmail.com"]
@@ -12,7 +12,6 @@ Gem::Specification.new do |s|
   # = MANIFEST =
   s.files = %w[
     Gemfile
-    Gemfile.lock
     History.txt
     LICENSE.txt
     README.txt
@@ -87,6 +86,7 @@ Gem::Specification.new do |s|
     test/replica_sets/replication_ack_test.rb
     test/replica_sets/rs_test_helper.rb
     test/safe_test.rb
+    test/subscribe_test.rb
     test/support/hash_with_indifferent_access.rb
     test/support/keys.rb
     test/support_test.rb
