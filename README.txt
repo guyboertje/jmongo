@@ -55,3 +55,7 @@ need to specify the w option in the uri. e.g. mongodb://0.0.0.0:27017/?fsync=tru
   a value of true will use the defaults, a value of float will set the timeout whaile a hash will allow you to
   control the timeout as well as your own poison doc and the poison doc equality (lambda/proc) mechanism.
   The default timeout is 0.125 seconds.
+
+2011-10-22
+  Based on the tailable cursor work above, I introduced a new feature unique to the driver: monitorable
+  collections. A monitorable collection, when inserted (atm) will also insert to a capped collection called a monitor.  You can then subscribe to the monitor by giving the subscribe method two callbacks and a timeout period 
