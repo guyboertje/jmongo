@@ -8,7 +8,7 @@ class TestCollection < MiniTest::Unit::TestCase
   def setup
     Cfg.clear_all
   end
-
+a
   def test_capped_method
 
     Cfg.db.create_collection('normal').insert('x'=>3)
@@ -910,7 +910,7 @@ describe "Collection" do
       1000.times do
         assert tail.next_document
       end
-      assert true, tail.has_next?
+      assert_equal true, tail.has_next?
       assert_nil tail.next_document
     end
 
@@ -919,7 +919,7 @@ describe "Collection" do
       1000.times do
         assert tail.next_document
       end
-      assert true, tail.has_next?
+      assert_equal true, tail.has_next?
       assert_nil tail.next_document
     end
 
@@ -928,7 +928,7 @@ describe "Collection" do
       1000.times do
         assert tail.next_document
       end
-      assert true, tail.has_next?
+      assert_equal true, tail.has_next?
       assert_nil tail.next_document
     end
 
@@ -940,7 +940,7 @@ describe "Collection" do
       1000.times do
         assert tail.next_document
       end
-      assert true, tail.has_next?
+      assert_equal true, tail.has_next?
       assert_nil tail.next_document
     end
   end
