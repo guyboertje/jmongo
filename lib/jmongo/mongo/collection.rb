@@ -29,6 +29,10 @@ module Mongo
       end
 
       def _create_index(obj, opts = {})
+        # if we don't do this copy, multi-threaded usage spews out errors
+        # when the hash is modified later in this function
+        opts = Marshal.load(Marshal.dump opts)
+
         opt_name = name_from(opts)
         opts[:dropDups] = opts.delete(:drop_dups) if opts.has_key?(:drop_dups)
         field_spec = parse_index_spec(obj)
