@@ -21,7 +21,7 @@ require 'timeout'
 require 'java'
 
 require 'require_all'
-require_rel 'jmongo/*.jar'
+require_rel 'jmongo/mongo-2.10.0.jar'
 
 require_rel 'jmongo/**/*.rb'
 

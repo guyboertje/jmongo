@@ -1,3 +1,2 @@
-rvm jruby-head@jmongo --create
-export JRUBY_OPTS="--1.9"
+rvm jruby-1.7.0@jmongo --create
 

@@ -6,8 +6,8 @@ module JMongo
   java_import com.mongodb.DBCollection
   java_import com.mongodb.DBCursor
   java_import com.mongodb.DBObject
-  java_import com.mongodb.Mongo
-  java_import com.mongodb.MongoOptions
+  java_import com.mongodb.MongoClient
+  java_import com.mongodb.MongoClientOptions
   java_import com.mongodb.ServerAddress
   java_import com.mongodb.WriteConcern
   java_import com.mongodb.WriteResult
