@@ -15,10 +15,11 @@
 module Mongo
 
   class Collection
-    include Mongo::Utils
-    
-    attr_reader :j_collection
-    attr_reader :db, :name, :pk_factory, :hint
+    include Mongo::JavaImpl::Utils
+    include Mongo::JavaImpl::Collection_
+
+    attr_reader :j_collection, :j_db
+    attr_reader :db, :name, :pk_factory
 
     # Initialize a collection object.
     #
@@ -34,30 +35,52 @@ module Mongo
     # @return [Collection]
     #
     # @core collections constructor_details
-    def initialize(db, name, pk_factory=nil)
-      case name
-      when Symbol, String
+    #db, name, options=nil, j_collection=nil
+    def initialize(*args)
+      j_collection = nil
+      @opts = {}
+      if args.size == 4
+        j_collection = args.pop
+      end
+      if args.size == 3
+        @opts = args.pop
+      end
+      if args.size < 2
+        raise ArgumentError.new("Must supply at least name and db parameters")
+      end
+      if args.first.is_a?(String)
+        name, db = args
       else
-        raise TypeError, "new_name must be a string or symbol"
+        db, name = args
       end
-
-      name = name.to_s
-
-      if name.empty? or name.include? ".."
-        raise Mongo::InvalidNSName, "collection names cannot be empty"
-      end
-      if name.include? "$"
-        raise Mongo::InvalidNSName, "collection names must not contain '$'" unless name =~ /((^\$cmd)|(oplog\.\$main))/
-      end
-      if name.match(/^\./) or name.match(/\.$/)
-        raise Mongo::InvalidNSName, "collection names must not start or end with '.'"
-      end
-
-      @db, @j_db, @name  = db, db.j_db, name
-      #@connection = @db.connection
-      #@pk_factory = pk_factory || BSON::ObjectID
+      @name = validate_name(name)
+      @db, @j_db  = db, db.j_db
+      @connection = @db.connection
+      @pk_factory = @opts.delete(:pk)|| BSON::ObjectId
       @hint = nil
-      @j_collection = @j_db.getCollection @name
+
+      @monitor = @opts.delete(:monitor)
+      if @monitor
+        setup_monitor
+      elsif @opts.has_key?(:monitor_source)
+        @monitor_source = @opts.delete(:monitor_source)
+      end
+
+      @j_collection = j_collection || @j_db.create_collection(@name, to_dbobject(@opts))
+    end
+
+    def setup_monitor
+      mon_opts = @monitor.is_a?(Hash)? @monitor : {}
+      size = mon_opts.fetch(:size, 8000)
+      @monitor_max = mon_opts.fetch(:max, 100)
+      opts = {:capped => true, :max => @monitor_max, :size => size, :monitor_source => self}
+      @mon_collection = @db.create_collection("#{@name}-monitor", opts)
+      @j_mon_collection = @mon_collection.j_collection
+      @monitorable = true
+    end
+
+    def safe
+      !!@opts.fetch(:safe, false)
     end
 
     # Return a sub-collection of this collection by name. If 'users' is a collection, then
@@ -72,6 +95,12 @@ module Mongo
     # @return [Collection]
     #   the specified sub-collection
     def [](name)
+      new_name = "#{self.name}.#{name}"
+      @db.collection(new_name, @opts)
+    end
+
+    def capped?
+      @j_collection.capped?
     end
 
     # Set a hint field for query optimizer. Hint may be a single field
@@ -81,8 +110,13 @@ module Mongo
     # @param [String, Array, OrderedHash] hint a single field, an array of
     #   fields, or a hash specifying fields
     def hint=(hint=nil)
+      @hint = prep_hint(hint)
+      self
     end
 
+    def hint
+      @hint 
+    end
     # Query the database.
     #
     # The +selector+ argument is a prototype document that all results must
@@ -130,30 +164,34 @@ module Mongo
     #
     # @core find find-instance_method
     def find(selector={}, opts={})
-      fields = opts.delete(:fields)
-      fields = ["_id"] if fields && fields.empty?
+      fields = prep_fields(opts.delete(:fields))
       skip   = opts.delete(:skip) || skip || 0
       limit  = opts.delete(:limit) || 0
       sort   = opts.delete(:sort)
       hint   = opts.delete(:hint)
       snapshot = opts.delete(:snapshot)
       batch_size = opts.delete(:batch_size)
-      if opts[:timeout] == false && !block_given?
+      timeout    = (opts.delete(:timeout) == false) ? false : true
+      transformer = opts.delete(:transformer)
+      if timeout == false && !block_given?
         raise ArgumentError, "Timeout can be set to false only when #find is invoked with a block."
       end
-      timeout = block_given? ? (opts.delete(:timeout) || true) : true
+
       if hint
-        hint = normalize_hint_fields(hint)
+        hint = prep_hint(hint)
       else
         hint = @hint        # assumed to be normalized already
       end
+
       raise RuntimeError, "Unknown options [#{opts.inspect}]" unless opts.empty?
 
       cursor = Cursor.new(self, :selector => selector, :fields => fields, :skip => skip, :limit => limit,
-                          :order => sort, :hint => hint, :snapshot => snapshot, :timeout => timeout, :batch_size => batch_size)
+                                :order => sort, :hint => hint, :snapshot => snapshot,
+                                :batch_size => batch_size, :timeout => timeout,
+                                :transformer => transformer)
       if block_given?
         yield cursor
-        cursor.close()
+        cursor.close
         nil
       else
         cursor
@@ -165,8 +203,8 @@ module Mongo
     # @return [OrderedHash, Nil]
     #   a single document or nil if no result is found.
     #
-    # @param [Hash, ObjectID, Nil] spec_or_object_id a hash specifying elements 
-    #   which must be present for a document to be included in the result set or an 
+    # @param [Hash, ObjectID, Nil] spec_or_object_id a hash specifying elements
+    #   which must be present for a document to be included in the result set or an
     #   instance of ObjectID to be used as the value for an _id query.
     #   If nil, an empty selector, {}, will be used.
     #
@@ -179,14 +217,18 @@ module Mongo
       spec = case spec_or_object_id
              when nil
                {}
-#             when BSON::ObjectID
-#               {:_id => spec_or_object_id}
+             when BSON::ObjectId
+               {'_id' => spec_or_object_id}
              when Hash
                spec_or_object_id
              else
-               raise TypeError, "spec_or_object_id must be an instance of ObjectID or Hash, or nil"
+               raise TypeError, "spec_or_object_id must be an instance of ObjectId or Hash, or nil"
              end
-      find(spec, opts.merge(:limit => 1, :timeout => true)).next_document
+      begin
+        find_one_document(spec, opts)
+      rescue => ex
+        raise OperationFailure, ex.message
+      end
     end
 
     # Save a document to this collection.
@@ -198,11 +240,12 @@ module Mongo
     #
     # @return [ObjectID] the _id of the saved document.
     #
-    # @option opts [Boolean] :safe (+false+) 
+    # @option opts [Boolean] :safe (+false+)
     #   If true, check that the save succeeded. OperationFailure
     #   will be raised on an error. Note that a safe check requires an extra
     #   round-trip to the database.
     def save(doc, options={})
+      save_document(doc, options[:safe])
     end
 
     # Insert one or more documents into the collection.
@@ -214,17 +257,22 @@ module Mongo
     #   the _id of the inserted document or a list of _ids of all inserted documents.
     #   Note: the object may have been modified by the database's PK factory, if it has one.
     #
-    # @option opts [Boolean] :safe (+false+) 
+    # @option opts [Boolean] :safe (+false+)
     #   If true, check that the save succeeded. OperationFailure
     #   will be raised on an error. Note that a safe check requires an extra
     #   round-trip to the database.
     #
     # @core insert insert-instance_method
     def insert(doc_or_docs, options={})
-      doc_or_docs = [doc_or_docs] unless doc_or_docs.is_a?(Array)
-      #doc_or_docs.collect! { |doc| @pk_factory.create_pk(doc) }
-      result = insert_documents(doc_or_docs, @name, true, options[:safe])
-      #result.size > 1 ? result : result.first
+      doc_or_docs = [doc_or_docs] unless doc_or_docs.kind_of?(Array)
+      doc_or_docs.collect! do |doc|
+        @pk_factory.create_pk(doc)
+        prep_id(doc)
+      end
+      safe = options.fetch(:safe, @opts[:safe])
+      continue = (options[:continue_on_error] || false)
+      docs = insert_documents(doc_or_docs, safe, continue)
+      docs.size == 1 ? docs.first['_id'] : docs.collect{|doc| doc['_id']}
     end
     alias_method :<<, :insert
 
@@ -249,23 +297,8 @@ module Mongo
     #   and the operation fails.
     #
     # @core remove remove-instance_method
-    def remove(selector={}, opts={})
-      # Initial byte is 0.
-      message = BSON::ByteBuffer.new([0, 0, 0, 0])
-      BSON::BSON_RUBY.serialize_cstr(message, "#{@db.name}.#{@name}")
-      message.put_int(0)
-      message.put_array(BSON::BSON_CODER.serialize(selector, false, true).to_a)
-
-      if opts[:safe]
-        @connection.send_message_with_safe_check(Mongo::Constants::OP_DELETE, message, @db.name,
-          "#{@db.name}['#{@name}'].remove(#{selector.inspect})")
-        # the return value of send_message_with_safe_check isn't actually meaningful --
-        # only the fact that it didn't raise an error is -- so just return true
-        true
-      else
-        @connection.send_message(Mongo::Constants::OP_DELETE, message,
-          "#{@db.name}['#{@name}'].remove(#{selector.inspect})")
-      end
+    def remove(selector={}, options={})
+      remove_documents(selector,options[:safe])
     end
 
     # Update a single document in this collection.
@@ -282,29 +315,16 @@ module Mongo
     # @option [Boolean] :upsert (+false+) if true, performs an upsert (update or insert)
     # @option [Boolean] :multi (+false+) update all documents matching the selector, as opposed to
     #   just the first matching document. Note: only works in MongoDB 1.1.3 or later.
-    # @option opts [Boolean] :safe (+false+) 
+    # @option opts [Boolean] :safe (+false+)
     #   If true, check that the save succeeded. OperationFailure
     #   will be raised on an error. Note that a safe check requires an extra
-    #   round-trip to the database.
+    #   round-trip to the database.  NOTE!!!! Java driver does not have a safe option for update
     #
     # @core update update-instance_method
     def update(selector, document, options={})
-      # Initial byte is 0.
-      message = BSON::ByteBuffer.new([0, 0, 0, 0])
-      BSON::BSON_RUBY.serialize_cstr(message, "#{@db.name}.#{@name}")
-      update_options  = 0
-      update_options += 1 if options[:upsert]
-      update_options += 2 if options[:multi]
-      message.put_int(update_options)
-      message.put_array(BSON::BSON_CODER.serialize(selector, false, true).to_a)
-      message.put_array(BSON::BSON_CODER.serialize(document, false, true).to_a)
-      if options[:safe]
-        @connection.send_message_with_safe_check(Mongo::Constants::OP_UPDATE, message, @db.name,
-          "#{@db.name}['#{@name}'].update(#{selector.inspect}, #{document.inspect})")
-      else
-        @connection.send_message(Mongo::Constants::OP_UPDATE, message,
-          "#{@db.name}['#{@name}'].update(#{selector.inspect}, #{document.inspect})")
-      end
+      upsert, multi = !!(options[:upsert]), !!(options[:multi])
+      safe = options.fetch(:safe, @opts[:safe])
+      update_documents(selector, document, upsert, multi, safe)
     end
 
     # Create a new index.
@@ -350,64 +370,37 @@ module Mongo
     #
     # @core indexes create_index-instance_method
     def create_index(spec, opts={})
-      opts.assert_valid_keys(:min, :max, :background, :unique, :dropDups) if opts.is_a?(Hash)
-      field_spec = OrderedHash.new
-      if spec.is_a?(String) || spec.is_a?(Symbol)
-        field_spec[spec.to_s] = 1
-      elsif spec.is_a?(Array) && spec.all? {|field| field.is_a?(Array) }
-        spec.each do |f|
-          if [Mongo::ASCENDING, Mongo::DESCENDING, Mongo::GEO2D].include?(f[1])
-            field_spec[f[0].to_s] = f[1]
-          else
-            raise MongoArgumentError, "Invalid index field #{f[1].inspect}; " + 
-              "should be one of Mongo::ASCENDING (1), Mongo::DESCENDING (-1) or Mongo::GEO2D ('2d')."
-          end
-        end
-      else
-        raise MongoArgumentError, "Invalid index specification #{spec.inspect}; " + 
-          "should be either a string, symbol, or an array of arrays."
-      end
-
-      name = generate_index_name(field_spec)
-      if opts == true || opts == false
-        warn "For Collection#create_index, the method for specifying a unique index has changed." +
-          "Please pass :unique => true to the method instead."
-      end
-      sel  = {
-        :name   => name,
-        :ns     => "#{@db.name}.#{@name}",
-        :key    => field_spec,
-        :unique => (opts == true ? true : false) }
-      sel.merge!(opts) if opts.is_a?(Hash)
-      begin
-        response = insert_documents([sel], Mongo::DB::SYSTEM_INDEX_COLLECTION, false, true)
-      rescue Mongo::OperationFailure
-        raise Mongo::OperationFailure, "Failed to create index #{sel.inspect} with the following errors: #{response}"
-      end
-      name
+      _create_index(spec, opts)
     end
 
+    def ensure_index(spec, opts={})
+      _ensure_index(spec, opts)
+    end
+      
     # Drop a specified index.
     #
-    # @param [String] name
+    # @param [String, Array] spec
+    #   should be either a single field name or an array of
+    #   [field name, direction] pairs. Directions should be specified
+    #   as Mongo::ASCENDING, Mongo::DESCENDING, or Mongo::GEO2D.
     #
     # @core indexes
-    def drop_index(name)
-      @db.drop_index(@name, name)
+    def drop_index(spec)
+      raise MongoArgumentError, "Cannot drop index for nil name" unless name
+      _drop_index(spec)
     end
 
     # Drop all indexes.
     #
     # @core indexes
     def drop_indexes
-
       # Note: calling drop_indexes with no args will drop them all.
-      @db.drop_index(@name, '*')
+      @j_collection.dropIndexes('*')
     end
 
     # Drop the entire collection. USE WITH CAUTION.
     def drop
-      @collection.drop
+      @j_collection.drop
     end
 
 
@@ -426,12 +419,16 @@ module Mongo
     #
     # @core findandmodify find_and_modify-instance_method
     def find_and_modify(opts={})
-      cmd = OrderedHash.new
-      cmd[:findandmodify] = @name
-      cmd.merge!(opts)
-      cmd[:sort] = Mongo::Support.format_order_clause(opts[:sort]) if opts[:sort]
-
-      @db.command(cmd, false, true)['value']
+      query  = opts[:query] || {}
+      fields = opts[:fields] || {}
+      sort   = prep_sort(opts[:sort] || [])
+      update = opts[:update] || {}
+      remove = opts[:remove] || false
+      new_    = opts[:new] || false
+      upsert = opts[:upsert] || false
+      trap_raise(OperationFailure) do
+        find_and_modify_document(query, fields, sort, remove, update, new_, upsert)
+      end
     end
 
     # Perform a map/reduce operation on the current collection.
@@ -456,72 +453,125 @@ module Mongo
     #
     # @core mapreduce map_reduce-instance_method
     def map_reduce(map, reduce, opts={})
-      map    = BSON::Code.new(map) unless map.is_a?(BSON::Code)
-      reduce = BSON::Code.new(reduce) unless reduce.is_a?(BSON::Code)
+      query = opts.fetch(:query,{})
+      sort = opts.fetch(:sort,[])
+      limit = opts.fetch(:limit,0)
+      finalize = opts[:finalize]
+      out = opts[:out]
+      keeptemp = opts.fetch(:keeptemp,true)
+      verbose = opts.fetch(:verbose,true)
+      raw     = opts.delete(:raw)
 
-      hash = OrderedHash.new
-      hash['mapreduce'] = self.name
-      hash['map'] = map
-      hash['reduce'] = reduce
-      hash.merge! opts
+      m = map.to_s
+      r = reduce.to_s
 
-      result = @db.command(hash)
-      unless result["ok"] == 1
-        raise Mongo::OperationFailure, "map-reduce failed: #{result['errmsg']}"
+      mrc = case out
+          when String
+            JMongo::MapReduceCommand.new(@j_collection, m, r, out, REPLACE, to_dbobject(query))
+          when Hash
+            if out.keys.size != 1
+              raise ArgumentError, "You need to specify one key value pair in the out hash"
+            end
+            out_type = out.keys.first
+            out_val = out[out_type]
+            unless MapReduceEnumHash.keys.include?(out_type)
+              raise ArgumentError, "Your out hash must have one of these keys: #{MapReduceEnumHash.keys}"
+            end
+            out_type_enum = MapReduceEnumHash[out_type]
+            out_dest = out_val.is_a?(String) ? out_val : nil
+            JMongo::MapReduceCommand.new(@j_collection, m, r, out_dest, out_type_enum, to_dbobject(query))
+          else
+            raise ArgumentError, "You need to specify an out parameter in the options hash"
+          end
+
+      mrc.verbose = verbose
+      mrc.sort = prep_sort(sort)
+      mrc.limit = limit
+      mrc.finalize = finalize
+      result =  from_dbobject(@j_db.command(mrc.toDBObject))
+
+      if raw
+        result
+      elsif result["result"]
+        @db[result["result"]]
+      else
+        raise ArgumentError, "Could not instantiate collection from result. If you specified " +
+          "{:out => {:inline => true}}, then you must also specify :raw => true to get the results."
       end
-      @db[result["result"]]
     end
     alias :mapreduce :map_reduce
 
     # Perform a group aggregation.
     #
-    # @param [Array, String, BSON::Code, Nil] :key either 1) an array of fields to group by,
-    #   2) a javascript function to generate the key object, or 3) nil.
-    # @param [Hash] condition an optional document specifying a query to limit the documents over which group is run.
-    # @param [Hash] initial initial value of the aggregation counter object
-    # @param [String, BSON::Code] reduce aggregation function, in JavaScript
-    # @param [String, BSON::Code] finalize :: optional. a JavaScript function that receives and modifies
-    #              each of the resultant grouped objects. Available only when group is run
-    #              with command set to true.
+    # @param [Hash] opts the options for this group operation. The minimum required are :initial
+    #   and :reduce.
     #
-    # @return [Array] the grouped items.
-    def group(key, condition, initial, reduce, finalize=nil)
-      reduce = BSON::Code.new(reduce) unless reduce.is_a?(BSON::Code)
+    # @option opts [Array, String, Symbol] :key (nil) Either the name of a field or a list of fields to group by (optional).
+    # @option opts [String, BSON::Code] :keyf (nil) A JavaScript function to be used to generate the grouping keys (optional).
+    # @option opts [String, BSON::Code] :cond ({}) A document specifying a query for filtering the documents over
+    #   which the aggregation is run (optional).
+    # @option opts [Hash] :initial the initial value of the aggregation counter object (required).
+    # @option opts [String, BSON::Code] :reduce (nil) a JavaScript aggregation function (required).
+    # @option opts [String, BSON::Code] :finalize (nil) a JavaScript function that receives and modifies
+    #   each of the resultant grouped objects. Available only when group is run with command
+    #   set to true.
+    #
+    # @return [Array] the command response consisting of grouped items.
+    def group(opts, condition={}, initial={}, reduce=nil, finalize=nil)
+      key = keyf = false
+      if opts.is_a?(Hash)
+        reduce, finalize, initial= opts.values_at(:reduce, :finalize, :initial)
+        key, keyf = opts.values_at(:key, :keyf)
+        condition = opts.fetch(:cond, {})
+        unless key.nil? && keyf.nil?
+          unless key.is_a?(Array) || keyf.is_a?(String) || keyf.is_a?(BSON::Code)
+            raise MongoArgumentError, "Group takes either an array of fields to group by or a JavaScript function" +
+              "in the form of a String or BSON::Code."
+          end
+        end
+      else
+        warn "Collection#group no longer take a list of parameters. This usage is deprecated and will be remove in v2.0." +
+             "Check out the new API at http://api.mongodb.org/ruby/current/Mongo/Collection.html#group-instance_method"
+        case opts
+        when Array
+          key = opts
+        when String, BSON::Code
+          keyf = opts
+        else
+          raise MongoArgumentError, "Group takes either an array of fields to group by or a JavaScript function" +
+          "in the form of a String or BSON::Code."
+        end
+      end
 
-      group_command = {
+      if !(reduce && initial)
+        raise MongoArgumentError, "Group requires at minimum values for initial and reduce."
+      end
+
+      cmd = {
         "group" => {
           "ns"      => @name,
-          "$reduce" => reduce,
+          "$reduce" => reduce.to_bson_code,
           "cond"    => condition,
           "initial" => initial
         }
       }
 
-      unless key.nil?
-        if key.is_a? Array
-          key_type = "key"
-          key_value = {}
-          key.each { |k| key_value[k] = 1 }
-        else
-          key_type  = "$keyf"
-          key_value = key.is_a?(BSON::Code) ? key : BSON::Code.new(key)
-        end
-
-        group_command["group"][key_type] = key_value
+      if keyf
+        cmd["group"]["$keyf"] = keyf.to_bson_code
+      elsif key
+        key_hash = Hash[key.zip( [1]*key.size )]
+        cmd["group"]["key"] = key_hash
       end
 
-      finalize = BSON::Code.new(finalize) if finalize.is_a?(String)
-      if finalize.is_a?(BSON::Code)
-        group_command['group']['finalize'] = finalize
+      if finalize
+        cmd['group']['finalize'] = finalize.to_bson_code
       end
 
-      result = @db.command group_command
+      result = from_dbobject(@db.command(cmd))
 
-      if result["ok"] == 1
-        result["retval"]
-      else
-        raise OperationFailure, "group command failed: #{result['errmsg']}"
-      end
+      return result["retval"] if Mongo.result_ok?(result)
+
+      raise OperationFailure, "group command failed: #{result['errmsg']}"
     end
 
     # Return a list of distinct values for +key+ across all
@@ -551,42 +601,30 @@ module Mongo
     # @return [Array] an array of distinct values.
     def distinct(key, query=nil)
       raise MongoArgumentError unless [String, Symbol].include?(key.class)
-      command = OrderedHash.new
-      command[:distinct] = @name
-      command[:key]      = key.to_s
-      command[:query]    = query
-
-      @db.command(command)["values"]
+      if query
+        from_dbobject @j_collection.distinct(key.to_s, to_dbobject(query))
+      else
+        from_dbobject @j_collection.distinct(key.to_s)
+      end
     end
 
     # Rename this collection.
     #
     # Note: If operating in auth mode, the client must be authorized as an admin to
-    # perform this operation. 
+    # perform this operation.
     #
     # @param [String] new_name the new name for this collection
     #
     # @raise [Mongo::InvalidNSName] if +new_name+ is an invalid collection name.
     def rename(new_name)
-      case new_name
-      when Symbol, String
-      else
-        raise TypeError, "new_name must be a string or symbol"
+      _name = validate_name(new_name)
+      begin
+        jcol = @j_collection.rename(_name)
+        @name = _name
+        @j_collection = jcol
+      rescue => ex
+        raise MongoDBError, "Error renaming collection: #{name}, more: #{ex.message}"
       end
-
-      new_name = new_name.to_s
-
-      if new_name.empty? or new_name.include? ".."
-        raise Mongo::InvalidNSName, "collection names cannot be empty"
-      end
-      if new_name.include? "$"
-        raise Mongo::InvalidNSName, "collection names must not contain '$'"
-      end
-      if new_name.match(/^\./) or new_name.match(/\.$/)
-        raise Mongo::InvalidNSName, "collection names must not start or end with '.'"
-      end
-
-      @db.rename_collection(@name, new_name)
     end
 
     # Get information on the indexes for this collection.
@@ -603,7 +641,8 @@ module Mongo
     #
     # @return [Hash] options that apply to this collection.
     def options
-      @db.collections_info(@name).next_document['options']
+      info = @db.collections_info(@name).to_a
+      info.last['options']
     end
 
     # Return stats on the collection. Uses MongoDB's collstats command.
@@ -616,45 +655,56 @@ module Mongo
     # Get the number of documents in this collection.
     #
     # @return [Integer]
-    def count
-      find().count()
+    def count(opts={})
+      return @j_collection.count() if opts.empty?
+      query = opts[:query] || opts['query'] || {}
+      fields = opts[:fields] || opts['fields'] || {}
+      limit = opts[:limit] || opts['limit'] || 0
+      skip = opts[:skip] || opts['skip'] || 0
+      @j_collection.get_count(to_dbobject(query), to_dbobject(fields), limit, skip)
     end
 
     alias :size :count
 
-    protected
-
-    def normalize_hint_fields(hint)
-      case hint
-      when String
-        {hint => 1}
-      when Hash
-        hint
-      when nil
-        nil
-      else
-        h = OrderedHash.new
-        hint.to_a.each { |k| h[k] = 1 }
-        h
-      end
+    def monitor_collection
+      raise InvalidOperation, "Monitoring has not been setup, add :monitor - true or Hash" unless @monitorable
+      @mon_collection
     end
 
-    private
-
-    def insert_documents(documents, collection_name=@name, check_keys=true, safe=false)
-      documents.each do |doc|
-        db_object = to_dbobject doc
-        @j_collection.insert db_object
-      end
+    def monitored_collection
+      @monitor_source
     end
 
-    def generate_index_name(spec)
-      indexes = []
-      spec.each_pair do |field, direction|
-        indexes.push("#{field}_#{direction}")
-      end
-      indexes.join("_")
-    end
-  end
+    def monitor_subscribe(opts, &callback_doc)
+      raise MongoArgumentError, "Not a monitorable collection" if @monitor_source.nil?
+      raise MongoArgumentError, "Must supply a block" unless block_given?
+      raise MongoArgumentError, "opts needs to be a Hash" unless opts.is_a?(Hash)
+      callback_exit = opts[:callback_exit]
+      raise MongoArgumentError, "Need a callable for exit callback" unless callback_doc.respond_to?('call')
+      exit_check_timeout = opts[:exit_check_timeout]
+      raise MongoArgumentError, "Need a positive float for timeout" unless exit_check_timeout.to_f > 0.0
 
-end
+      tail = Mongo::Cursor.new(self, :timeout => false, :tailable => true, :await_data => 0.5, :order => [['$natural', 1]])
+      
+      loop_th = Thread.new(tail, callback_doc) do |cur, cb|
+        while !Thread.current[:stop]
+          doc = cur.next
+          cb.call(doc) if doc
+        end
+      end
+      loop_th[:stop] = false
+
+      exit_th = Thread.new(exit_check_timeout.to_f, callback_exit) do |to, cb|
+        while true
+          sleep to
+          must_exit = cb.call
+          break if must_exit
+        end
+        loop_th[:stop] = true
+      end
+      #
+    end
+
+    
+  end #class
+end #module

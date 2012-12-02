@@ -1,0 +1,11 @@
+.DS_Store
+.rvmrc
+pkg/
+Gemfile.lock
+log/*
+log/**/*
+bin/*
+tmp/*
+pkg/
+/.project
+/.classpath

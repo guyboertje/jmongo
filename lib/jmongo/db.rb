@@ -15,27 +15,54 @@
 module Mongo
 
   class DB
-    include Mongo::Utils
-    
-    attr_reader :j_db
-    attr_reader :connection
-    
+    include Mongo::JavaImpl::Db_
+    include Mongo::JavaImpl::Utils
+
+    attr_reader :j_db, :name, :connection, :safe
+
+    attr_accessor :strict
+
+    ProfileLevel = {:off => 0, :slow_only => 1, :all => 2, 0 => 'off', 1 => 'slow_only', 2 => 'all'}
+
+    def self.write_concern(safe_)
+      return safe_ if safe_.is_a?(JMongo::WriteConcern)
+      return JMongo::WriteConcern.new(0) if safe_.is_a?(FalseClass)
+      return JMongo::WriteConcern.new(true) if safe_.is_a?(TrueClass)
+      return JMongo::WriteConcern.new(safe.to_i) if safe_.is_a?(Numeric)
+      return JMongo::WriteConcern.new(-1) unless safe_.is_a?(Hash)
+      w = safe_.fetch(:w, 0)
+      t = safe_.fetch(:wtimeout, 0)
+      f = !!safe_.fetch(:fsync, false)
+      JMongo::WriteConcern.new(w, t, f) #dont laugh!
+    end
+
     def initialize(db_name, connection, options={})
       @name       = db_name
       @connection = connection
       @j_db = @connection.connection.get_db db_name
+      @pk_factory = options[:pk]
+      @safe = options[:safe]
+      @strict = options.fetch(:strict, false)
     end
 
     def authenticate(username, password, save_auth=true)
-      raise_not_implemented
+      begin
+        succeeded = @j_db.authenticate(username, password)
+        if save_auth && succeeded
+          @connection.add_auth(@name, username, password)
+        end
+      rescue => e
+        succeeded = false
+      end
+      succeeded
     end
 
     def add_user(username, password)
-      raise_not_implemented
+      @j_db.add_user(username, password)
     end
 
     def remove_user(username)
-      raise_not_implemented
+      @j_db.remove_user(username)
     end
 
     def logout
@@ -43,48 +70,67 @@ module Mongo
     end
 
     def collection_names
-      raise_not_implemented
+      @j_db.get_collection_names
     end
 
     def collections
-      raise_not_implemented
+      collection_names.map do |name|
+        collection(name)
+      end
     end
 
     def collections_info(coll_name=nil)
-      raise_not_implemented
+      _collections_info coll_name
     end
 
     def create_collection(name, options={})
-      raise_not_implemented
+      validate_name(name)
+      if collection_exists?(name)
+        if strict?
+          raise MongoDBError, "Collection #{name} already exists. Currently in strict mode."
+        else
+          return Collection.new self, name, options, @j_db.get_collection(name)
+        end
+      end
+      begin
+        Collection.new self, name, options
+      rescue => ex
+        raise MongoDBError, "Collection #{name} creation error: " + ex.message
+      end
     end
 
-    def collection(name)
-      Collection.new self, name
+    def collection(name, options = {})
+      validate_name(name)
+      if strict? && !collection_exists?(name) 
+        raise MongoDBError, "Collection #{name} does not exists. Currently in strict mode."
+      else
+        Collection.new self, name, options, @j_db.get_collection(name)
+      end
     end
     alias_method :[], :collection
 
     def drop_collection(name)
-      raise_not_implemented
+      col_name = name.to_s
+      return true unless collection_exists?(col_name)
+
+      ok?(command(:drop => col_name))
     end
 
-    def error
-      raise_not_implemented
-    end
-
-    def last_status
+    def get_last_error
       from_dbobject(@j_db.getLastError)
     end
+    alias :last_status :get_last_error
 
     def error?
-      raise_not_implemented
+      !get_last_error['err'].nil?
     end
 
     def previous_error
-      raise_not_implemented
+      exec_command :getpreverror
     end
 
     def reset_error_history
-      raise_not_implemented
+      exec_command :reseterror
     end
 
     def query(collection, query, admin=false)
@@ -92,69 +138,141 @@ module Mongo
     end
 
     def dereference(dbref)
-      raise_not_implemented
+      ns = dbref.namespace
+      raise MongoArgumentError, "No collection for dbref: #{dbref.inspect}" unless collection_exists?(ns)
+      collection(ns).find_one("_id" => dbref.object_id)
     end
 
     def eval(code, *args)
-      raise_not_implemented
+      doc = do_eval(code, *args)
+      (retval = doc['retval']).is_a?(Hash) && (value = retval['value']) ? value : retval
     end
 
     def rename_collection(from, to)
-      raise_not_implemented
+      begin
+        @j_db.get_collection(from).rename(to)
+      rescue => ex
+        raise(MongoDBError, "Error renaming collection from: #{from}, to: #{to}")
+      end
+      true
     end
 
     def drop_index(collection_name, index_name)
-      raise_not_implemented
+      collection(collection_name).drop_index(index_name)
     end
 
     def index_information(collection_name)
-      raise_not_implemented
+      info = {}
+      from_dbobject(@j_db.getCollectionFromString(collection_name).getIndexInfo).each do |index|
+        info[index['name']] = index
+      end
+      info
     end
 
     def stats
-      raise_not_implemented
+      from_dbobject exec_command(:dbstats)
     end
 
     def create_index(collection_name, field_or_spec, unique=false)
-      raise_not_implemented
+      collection(collection_name).create_indexes(field_or_spec,{:unique=>unique})
+    end
+    # Return +true+ if an error was caused by the most recently executed
+    # database operation.
+    #
+    # @return [Boolean]
+    def error?
+      get_last_error['err'] != nil
     end
 
     def ok?(doc)
-      raise_not_implemented
+      doc['ok'] == 1.0 || doc['ok'] == true
     end
 
-    def command(selector, admin=false, check_response=false, sock=nil)
-      raise_not_implemented
+    def command(cmd, opts={})
+      selector = cmd.respond_to?('merge') ? cmd : {cmd.to_s => 1}
+      check_response = opts.fetch(:check_response, true)
+      raise MongoArgumentError, "command must be given a selector" if selector.empty?
+      if selector.keys.length > 1 && RUBY_VERSION < '1.9' && selector.class != BSON::OrderedHash
+        raise MongoArgumentError, "DB#command requires an OrderedHash when hash contains multiple keys"
+      end
+
+      begin
+        result = exec_command(selector)
+      rescue => ex
+        raise OperationFailure, "Database command '#{selector.keys.first}' failed: #{ex.message}"
+      end
+
+      raise OperationFailure, "Database command '#{selector.keys.first}' failed: returned null." if result.nil?
+
+      if (check_response && !ok?(result))
+        message = "Database command '#{selector.keys.first}' failed: (" + result.map{|k, v| "#{k}: '#{v}'"}.join('; ') + ")."
+        raise OperationFailure.new message
+      else
+        result
+      end
     end
 
     def full_collection_name(collection_name)
-      raise_not_implemented
+      "#{@name}.#{collection_name}"
     end
 
+    # Returns the value of the +strict+ flag.
+    def strict?; @strict; end
+
+    # The primary key factory object (or +nil+).
+    #
+    # @return [Object, Nil]
     def pk_factory
-      raise_not_implemented
+      @pk_factory
     end
 
+    # Specify a primary key factory if not already set.
+    #
+    # @raise [MongoArgumentError] if the primary key factory has already been set.
     def pk_factory=(pk_factory)
-      raise_not_implemented
+      if @pk_factory
+        raise MongoArgumentError, "Cannot change primary key factory once it's been set"
+      end
+
+      @pk_factory = pk_factory
     end
 
     def profiling_level
-      raise_not_implemented
+      oh = BSON::OrderedHash.new
+      oh['profile'] = -1
+      doc = command(oh, :check_response => false)
+      raise "Error with profile command: #{doc.inspect}" unless ok?(doc) && doc['was'].kind_of?(Numeric)
+      was = ProfileLevel[doc['was'].to_i]
+      raise "Error: illegal profiling level value #{doc['was']}" if was.nil?
+      was.to_sym
     end
 
     def profiling_level=(level)
-      raise_not_implemented
+      oh = BSON::OrderedHash.new
+      int_lvl = ProfileLevel[level]
+      raise "Error: illegal profiling level value #{level}" if int_lvl.nil?
+      oh['profile'] = int_lvl
+      doc = command(oh, :check_response => false)
+      ok?(doc) || raise(MongoDBError, "Error with profile command: #{doc.inspect}")
     end
 
     def profiling_info
-      raise_not_implemented
+      Cursor.new(Collection.new(SYSTEM_PROFILE_COLLECTION, self), :selector => {}).to_a
     end
 
     def validate_collection(name)
-      raise_not_implemented
+      cmd = BSON::OrderedHash.new
+      cmd['validate'] = name
+      cmd['full'] = true
+      doc = command(cmd, :check_response => false)
+      if !ok?(doc)
+        raise MongoDBError, "Error with validate command: #{doc.inspect}"
+      end
+      if (doc.has_key?('valid') && !doc['valid']) || (doc['result'] =~ /\b(exception|corrupt)\b/i)
+        raise MongoDBError, "Error: invalid collection #{name}: #{doc.inspect}"
+      end
+      doc
     end
-
   end # class DB
 
 end # module Mongo

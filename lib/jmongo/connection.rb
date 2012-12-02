@@ -15,20 +15,47 @@
 module Mongo
 
   class Connection
-    attr_reader :connection
-    
+    include Mongo::JavaImpl::Utils
+     extend Mongo::JavaImpl::NoImplYetClass
+    include Mongo::JavaImpl::Connection_::InstanceMethods
+     extend Mongo::JavaImpl::Connection_::ClassMethods
+
+    attr_reader :connection, :connector, :logger, :auths, :primary, :write_concern
+
+    DEFAULT_PORT = 27017
+
     def initialize host = nil, port = nil, opts = {}
-      @host = host || 'localhost'
-      @port = port || 27017
-      server_address = JMongo::ServerAddress.new @host, @port
-
-      options = JMongo::MongoOptions.new
-      options.connectionsPerHost = opts[:pool_size] || 1
-      options.socketTimeout = opts[:timeout].to_i * 1000 || 5000
-
-      @connection = JMongo::Mongo.new server_address, options
+      @logger = opts.delete(:logger)
+      @auths = opts.delete(:auths) || []
+      if opts.has_key?(:new_from_uri)
+        @mongo_uri = opts[:new_from_uri]
+        @options = @mongo_uri.options
+        @write_concern = @options.write_concern
+        @connection = JMongo::MongoClient.new(@mongo_uri)
+      else
+        @host = host || 'localhost'
+        @port = port || 27017
+        @server_address = JMongo::ServerAddress.new @host, @port
+        @options = JMongo::MongoClientOptions::Builder.new
+        opts.each do |k,v|
+          key = k.to_sym
+          jmo_key = JMongo.options_ruby2java_lu(key)
+          case jmo_key
+          when :safe
+            @write_concern = DB.write_concern(v)
+            @options.write_concern @write_concern
+          else
+            jmo_val = JMongo.options_ruby2java_xf(key, v)
+            @options.send("#{jmo_key}=", jmo_val)
+          end
+        end
+        @connection = JMongo::MongoClient.new(@server_address, @options.build)
+      end
+      @connector = @connection.connector
+      add = @connector.address
+      @primary = [add.host, add.port]
     end
-    
+
     def self.paired(nodes, opts={})
       raise_not_implemented
     end
@@ -42,7 +69,7 @@ module Mongo
     #
     # @return [Mongo::Connection]
     def self.from_uri(uri, opts={})
-      raise_not_implemented
+      _from_uri(uri,opts)
     end
 
     # Apply each of the saved database authentications.
@@ -53,7 +80,11 @@ module Mongo
     # @raise [AuthenticationError] raises an exception if any one
     #   authentication fails.
     def apply_saved_authentication
-      raise_not_implemented
+      return false if @auths.empty?
+      @auths.each do |auth|
+        self[auth['db_name']].authenticate(auth['username'], auth['password'], false)
+      end
+      true
     end
 
     # Save an authentication to this connection. When connecting,
@@ -67,7 +98,13 @@ module Mongo
     #
     # @return [Hash] a hash representing the authentication just added.
     def add_auth(db_name, username, password)
-      raise_not_implemented
+      remove_auth(db_name)
+      auth = {}
+      auth['db_name']  = db_name
+      auth['username'] = username
+      auth['password'] = password
+      @auths << auth
+      auth
     end
 
     # Remove a saved authentication for this connection.
@@ -76,14 +113,20 @@ module Mongo
     #
     # @return [Boolean]
     def remove_auth(db_name)
-      raise_not_implemented
+      return unless @auths
+      if @auths.reject! { |a| a['db_name'] == db_name }
+        true
+      else
+        false
+      end
     end
 
     # Remove all authenication information stored in this connection.
     #
     # @return [true] this operation return true because it always succeeds.
     def clear_auths
-      raise_not_implemented
+      @auths = []
+      true
     end
 
     # Return a hash with all database names
@@ -91,14 +134,17 @@ module Mongo
     #
     # @return [Hash]
     def database_info
-      raise_not_implemented
+      doc = self['admin'].command({:listDatabases => 1})
+      doc['databases'].each_with_object({}) do |db, info|
+        info[db['name']] = db['sizeOnDisk'].to_i
+      end
     end
 
     # Return an array of database names.
     #
     # @return [Array]
     def database_names
-      raise_not_implemented
+      get_db_names
     end
 
     # Return a database with the given name.
@@ -110,7 +156,7 @@ module Mongo
     #
     # @core databases db-instance_method
     def db(db_name, options={})
-      DB.new db_name, self, options
+      DB.new db_name, self, options 
     end
 
     # Shortcut for returning a database. Use DB#db to accept options.
@@ -121,14 +167,14 @@ module Mongo
     #
     # @core databases []-instance_method
     def [](db_name)
-      raise_not_implemented
+      db db_name
     end
 
     # Drop a database.
     #
     # @param [String] name name of an existing database.
     def drop_database(name)
-      raise_not_implemented
+      drop_a_db name
     end
 
     # Copy the database +from+ to +to+ on localhost. The +from+ database is
@@ -150,11 +196,18 @@ module Mongo
       raise_not_implemented
     end
 
+    # Checks if a server is alive. This command will return immediately
+    # even if the server is in a lock.
+    #
+    # @return [Hash]
+    def ping
+      db("admin").command('ping')
+    end
     # Get the build information for the current connection.
     #
     # @return [Hash]
     def server_info
-      raise_not_implemented
+      db("admin").command('buildinfo')
     end
 
     # Get the build version of the current server.
@@ -162,7 +215,7 @@ module Mongo
     # @return [Mongo::ServerVersion]
     #   object allowing easy comparability of version.
     def server_version
-      raise_not_implemented
+      ServerVersion.new(server_info["version"])
     end
 
     # Is it okay to connect to a slave?
@@ -172,6 +225,15 @@ module Mongo
       raise_not_implemented
     end
 
+    def log_operation(name, payload)
+      return unless @logger
+      msg = "#{payload[:database]}['#{payload[:collection]}'].#{name}("
+      msg += payload.values_at(:selector, :document, :documents, :fields ).compact.map(&:inspect).join(', ') + ")"
+      msg += ".skip(#{payload[:skip]})"  if payload[:skip]
+      msg += ".limit(#{payload[:limit]})"  if payload[:limit]
+      msg += ".sort(#{payload[:order]})"  if payload[:order]
+      @logger.debug "MONGODB #{msg}"
+    end
 
     ## Connections and pooling ##
 
@@ -195,17 +257,29 @@ module Mongo
     end
 
     def connect_to_master
-      raise_not_implemented
+      connect
     end
 
     def connected?
-      raise_not_implemented
+      @connection && @connector && @connector.is_open
     end
 
-    def close
-      raise_not_implemented
+    def connect
+      close
+      if @mongo_uri
+        @connection = JMongo::Mongo.new(@mongo_uri)
+      else
+        @connection = JMongo::Mongo.new(@server_address, @options)
+      end
+      @connector = @connection.connector
     end
-    
+    alias :reconnect :connect
+
+    def close
+      @connection.close if @connection
+      @connection = @connector = nil
+    end
+
   end # class Connection
 
 end # module Mongo
