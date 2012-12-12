@@ -47,7 +47,7 @@ module Mongo
 
     def authenticate(username, password, save_auth=true)
       begin
-        succeeded = @j_db.authenticate(username, password)
+        succeeded = @j_db.authenticate(username, java.lang.String.new(password).toCharArray)
         if save_auth && succeeded
           @connection.add_auth(@name, username, password)
         end
@@ -58,7 +58,7 @@ module Mongo
     end
 
     def add_user(username, password)
-      @j_db.add_user(username, password)
+      @j_db.add_user(username, java.lang.String.new(password).toCharArray)
     end
 
     def remove_user(username)
