@@ -31,27 +31,25 @@ module Mongo
         @mongo_uri = opts[:new_from_uri]
         @options = @mongo_uri.options
         @write_concern = @options.write_concern
-        @connection = JMongo::Mongo.new(@mongo_uri)
+        @connection = JMongo::MongoClient.new(@mongo_uri)
       else
         @host = host || 'localhost'
         @port = port || 27017
         @server_address = JMongo::ServerAddress.new @host, @port
-        @options = JMongo::MongoOptions.new
+        @options = JMongo::MongoClientOptions::Builder.new
         opts.each do |k,v|
           key = k.to_sym
           jmo_key = JMongo.options_ruby2java_lu(key)
           case jmo_key
           when :safe
             @write_concern = DB.write_concern(v)
-            @options.w = @write_concern.w
-            @options.wtimeout = @write_concern.wtimeout
-            @options.fsync = @write_concern.fsync
+            @options.write_concern @write_concern
           else
             jmo_val = JMongo.options_ruby2java_xf(key, v)
             @options.send("#{jmo_key}=", jmo_val)
           end
         end
-        @connection = JMongo::Mongo.new(@server_address, @options)
+        @connection = JMongo::MongoClient.new(@server_address, @options.build)
       end
       @connector = @connection.connector
       add = @connector.address
